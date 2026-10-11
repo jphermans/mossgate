@@ -455,6 +455,7 @@ final class MossgateScene: SKScene {
         loadLevel(index: index, toState: .play)
         runMoverTestIfRequested()
         runPlaceAtHookIfRequested()
+        runDeathTestHookIfRequested()
         runDropTestHookIfRequested()
         runSfxTestHookIfRequested()
     }
@@ -566,6 +567,49 @@ final class MossgateScene: SKScene {
     }
 
     func retryLevel() { loadLevel(index: levelIndex, toState: .play) }
+
+    /// Test hook: `-TestDeath 1` kills the player repeatedly and logs the light
+    /// counter and state after each death, so the lose-light → game-over flow
+    /// can be checked headlessly instead of by hand.
+    func runDeathTestHookIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestDeath") else { return }
+        // Wait for the scene to actually be presented before the first kill,
+        // otherwise the opening teleport lands before the view is live and the
+        // level load overwrites it.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { self.deathTestStep(0) }
+    }
+
+    private func deathTestStep(_ n: Int) {
+        guard n < 5 else { return }
+        let before = SettingsStore.shared.lives
+        playerY = level.killY + 40          // below the kill line: dies next frame
+        playerVy = 0
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+            guard let self else { return }
+            print("[Mossgate:DEATH] death \(n + 1): lives \(before) -> \(SettingsStore.shared.lives)"
+                  + "  state=\(String(describing: self.state))"
+                  + "  isOutOfLight=\(SettingsStore.shared.isOutOfLight)")
+            // Stop on game over so the screen stays up (and stays photographable)
+            // instead of being retried away.
+            if SettingsStore.shared.isOutOfLight {
+                print("[Mossgate:DEATH] out of light — run over, leaving the game-over screen up")
+                // Exercise the "Start over" action (refill + restart) exactly as
+                // the game-over panel's primary button does.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    SettingsStore.shared.refillLives()
+                    self?.retryLevel()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) { [weak self] in
+                        print("[Mossgate:DEATH] after Start over: lives=\(SettingsStore.shared.lives)"
+                              + "  state=\(String(describing: self?.state))"
+                              + "  isOutOfLight=\(SettingsStore.shared.isOutOfLight)")
+                    }
+                }
+                return
+            }
+            self.retryLevel()               // stand back up for the next round
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.deathTestStep(n + 1) }
+        }
+    }
     func respawnAtCheckpoint() {
         guard let snap = checkpointSnap else { retryLevel(); return }
         coinsGot = Set(snap.coins)
@@ -1052,9 +1096,9 @@ final class MossgateScene: SKScene {
         AudioEngine.shared.die()
         burst(at: CGPoint(x: playerX + Phys.playerW/2, y: playerY + Phys.playerH/2),
               count: 18, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 140)
-        // Losing the wick costs a unit of light.
-        SettingsStore.shared.loseLife()
-        setState(.dead)
+        // Losing the wick costs a unit of light. Running out ends the run.
+        let left = SettingsStore.shared.loseLife()
+        setState(left <= 0 ? .gameOver : .dead)
         notifyPhase()
     }
 

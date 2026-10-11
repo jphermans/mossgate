@@ -3,6 +3,8 @@ import SwiftUI
 /// In-game HUD: coin counter + level name + pause button.
 struct GameHUDView: View {
     let hud: MossgateScene.HudInfo
+    /// The pause button only makes sense while actually playing.
+    var showsPause: Bool = true
     let onPause: () -> Void
 
     var body: some View {
@@ -12,7 +14,12 @@ struct GameHUDView: View {
                 Spacer()
                 title
                 Spacer()
-                pauseButton
+                if showsPause {
+                    pauseButton
+                } else {
+                    // Keep the row's geometry stable when the button is hidden.
+                    Color.clear.frame(width: 38, height: 38)
+                }
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
@@ -176,7 +183,8 @@ struct OverlayPanel: View {
     let onQuit: () -> Void
     let onNext: (() -> Void)?
 
-    private var outOfLight: Bool { phase == .dead && hud.lives <= 0 }
+    /// Running out of light is now its own state rather than a relabelled death.
+    private var isGameOver: Bool { phase == .gameOver }
 
     var body: some View {
         ZStack {
@@ -194,10 +202,12 @@ struct OverlayPanel: View {
                 VStack(spacing: 8) {
                     if let onRetry {
                         primaryButton(action: {
-                            // Pause resumes; death and win both restart.
+                            // Pause resumes; death, win and game over restart.
                             if phase == .pause { onResume() } else { onRetry() }
                         })
-                        secondaryButton(action: onRetry)
+                        // Game over has one obvious action, so a second
+                        // "restart" button beside it would just be noise.
+                        if !isGameOver { secondaryButton(action: onRetry) }
                     }
                     if let onNext = onNext {
                         Button(action: onNext) {
@@ -212,9 +222,9 @@ struct OverlayPanel: View {
                         }
                     }
                     Button(action: onQuit) {
-                        Text(outOfLight ? "Back to the gates" : "All gates")
-                            .font(.system(size: 14, weight: outOfLight ? .semibold : .regular))
-                            .foregroundStyle(outOfLight ? Color("MossgateCream") : Color("MossgateMuted"))
+                        Text("All gates")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color("MossgateMuted"))
                             .frame(maxWidth: .infinity, minHeight: 38)
                     }
                 }
@@ -234,22 +244,22 @@ struct OverlayPanel: View {
     }
 
     private var eyebrow: some View {
-        Text(outOfLight ? "DARK" : eyebrowText)
+        Text(isGameOver ? "GAME OVER" : eyebrowText)
             .font(.system(size: 11, weight: .semibold))
             .tracking(4)
             .foregroundStyle(Color("MossgateLantern"))
     }
 
     private var title: some View {
-        Text(outOfLight ? "The lantern is out" : titleText)
+        Text(isGameOver ? "The lantern is out" : titleText)
             .font(.system(size: 32, weight: .semibold, design: .serif))
             .foregroundStyle(Color("MossgateCream"))
             .multilineTextAlignment(.center)
     }
 
     private var subtitle: String? {
-        if outOfLight {
-            return "Out of light. Return to the gates to relight the lantern."
+        if isGameOver {
+            return "Three falls and the light is spent. Start over to relight the lantern."
         }
         switch phase {
         case .pause: return hud.levelName
@@ -291,10 +301,11 @@ struct OverlayPanel: View {
 
     private var primaryText: String {
         switch phase {
-        case .pause: return "Resume"
-        case .dead:  return "Relight"
-        case .win:   return "Replay"
-        default:     return ""
+        case .pause:    return "Resume"
+        case .dead:     return "Relight"
+        case .win:      return "Replay"
+        case .gameOver: return "Start over"
+        default:        return ""
         }
     }
 

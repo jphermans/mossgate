@@ -22,6 +22,9 @@ enum Phys {
 
 enum GameState {
     case title, play, pause, dead, win
+    /// The light ran out. A distinct screen from `dead`: there is no way to
+    /// continue in place, only to start over with a full lantern.
+    case gameOver
     case levelSelect, setup
 }
 

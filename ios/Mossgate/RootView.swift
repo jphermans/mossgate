@@ -98,23 +98,31 @@ struct RootView: View {
             MossgateGameView(levelIndex: gameLevelIndex, session: session, hud: $hud)
                 .ignoresSafeArea()
             GameControlsView(touch: touch, onSceneRef: { _ in })
-            if hud.phase == .play {
-                GameHUDView(hud: hud) {
+            // Keep the HUD up while dead/win/game over so the light counter is
+            // actually visible at the moment it drops. The pause button only
+            // applies while playing.
+            if hud.phase != .title && hud.phase != .pause {
+                GameHUDView(hud: hud, showsPause: hud.phase == .play) {
                     session.scene?.pause()
                 }
             }
-            if hud.phase == .pause || hud.phase == .dead || hud.phase == .win {
+            if hud.phase == .pause || hud.phase == .dead
+               || hud.phase == .win || hud.phase == .gameOver {
                 OverlayPanel(
                     phase: hud.phase,
                     hud: hud,
                     onResume: { session.scene?.resume() },
-                    // Out of light: no retry — the only way on is back to the
-                    // gates, which refills the lantern to full.
-                    onRetry: (hud.phase == .dead && hud.lives <= 0)
-                             ? nil
+                    // Game over is terminal: the only way on is a fresh lantern.
+                    onRetry: (hud.phase == .gameOver)
+                             ? {
+                                 SettingsStore.shared.refillLives()
+                                 session.scene?.retryLevel()
+                               }
                              : { session.scene?.retryLevel() },
                     onQuit:   {
-                        if hud.lives <= 0 { SettingsStore.shared.refillLives() }
+                        // Leaving while out of light would otherwise strand the
+                        // player on the gates with no light to spend.
+                        if SettingsStore.shared.isOutOfLight { SettingsStore.shared.refillLives() }
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .title }
                     },
                     onNext:   hud.phase == .win && gameLevelIndex < Levels.all.count - 1
