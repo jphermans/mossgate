@@ -8,6 +8,7 @@ final class AudioEngine {
     static let shared = AudioEngine()
 
     private let engine = AVAudioEngine()
+    private let sfxNode = AVAudioPlayerNode()
     private let sfxMixer: AVAudioMixerNode
     private let ambientMixer: AVAudioMixerNode
     private var ambientPlayer: AVAudioPlayer?
@@ -17,8 +18,10 @@ final class AudioEngine {
         self.settings = settings
         self.sfxMixer = AVAudioMixerNode()
         self.ambientMixer = AVAudioMixerNode()
+        engine.attach(sfxNode)
         engine.attach(sfxMixer)
         engine.attach(ambientMixer)
+        engine.connect(sfxNode, to: sfxMixer, format: nil)
         engine.connect(sfxMixer, to: engine.mainMixerNode, format: nil)
         engine.connect(ambientMixer, to: engine.mainMixerNode, format: nil)
 
@@ -124,7 +127,7 @@ final class AudioEngine {
             data[startSample + i] = raw * env
         }
         // Schedule on the SFX mixer.
-        sfxMixer.scheduleBuffer(buffer, completionHandler: nil)
+        sfxNode.scheduleBuffer(buffer, completionHandler: nil)
     }
 
     private func noise(dur: Double, vol: Double, cutoff: Double) {
@@ -140,6 +143,6 @@ final class AudioEngine {
             let env = Float(vol) * Float(1.0 - Double(i) / Double(n))
             data[i] = Float.random(in: -1...1) * env
         }
-        sfxMixer.scheduleBuffer(buffer, completionHandler: nil)
+        sfxNode.scheduleBuffer(buffer, completionHandler: nil)
     }
 }

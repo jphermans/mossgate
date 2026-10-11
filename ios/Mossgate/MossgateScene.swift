@@ -693,3 +693,8 @@ private extension Array {
         indices.contains(index) ? self[index] : nil
     }
 }
+/// Mirror of the canvas engine's `clamp(v, a, b)` helper.
+@inline(__always)
+func clamp<T: Comparable>(_ v: T, _ a: T, _ b: T) -> T {
+    return Swift.max(a, Swift.min(b, v))
+}
