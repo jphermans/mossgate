@@ -316,7 +316,7 @@ final class MossgateScene: SKScene {
             time += dt
         }
         placeMovers()
-        positionCamera(immediately: false, dt: dt)
+        positionWorld()
         render()
     }
 
@@ -328,6 +328,25 @@ final class MossgateScene: SKScene {
         dropTimer = max(0, dropTimer - dt)
         buffer = max(0, buffer - dt)
         jumpAge += dt
+
+        // Camera follow — match the original canvas engine's look-ahead rule.
+        let focusX = playerX + Phys.playerW/2 + facing * 36
+        let focusY = playerY + Phys.playerH * 0.42
+        let left = 720 * (facing >= 0 ? 0.36 : 0.36)
+        let right = 720 * (facing >= 0 ? 0.56 : 0.56)
+        let top = 360 * 0.38
+        let bottom = 360 * 0.66
+        var desiredX = camX
+        var desiredY = camY
+        let sx = focusX - camX
+        let sy = focusY - camY
+        if sx < left { desiredX = focusX - left } else if sx > right { desiredX = focusX - right }
+        if sy < top { desiredY = focusY - top } else if sy > bottom { desiredY = focusY - bottom }
+        let k = 1 - exp(-7 * dt)
+        camX += (desiredX - camX) * k
+        camY += (desiredY - camY) * k
+        camX = max(0, min(camX, max(0, level.width - 720)))
+        camY = max(0, min(camY, max(0, level.height - 360)))
 
         let jumpDown = touchJump
         if jumpDown && !prevJump { buffer = Phys.buffer }
@@ -588,33 +607,30 @@ final class MossgateScene: SKScene {
     }
 
     // ── Camera ────────────────────────────────────────────────────
+    //
+    // We don't use a SKCameraNode. Instead, each frame we translate `worldNode` by
+    // (-camX, -camY), so the world region [camX, camX+720] x [camY, camY+360]
+    // maps onto the scene buffer [0, 720] x [0, 360]. SpriteKit then scales that
+    // buffer to fit the SKView via .resizeFill.
+    //
+    // Camera FOLLOW logic (move camX/camY based on player position) lives in
+    // `step()`. This function only applies the camera transform + screen shake.
 
     private func positionCamera(immediately: Bool, dt: CGFloat = 1/60) {
-        let focusX = playerX + Phys.playerW/2 + facing * 36
-        let focusY = playerY + Phys.playerH * 0.42
-        let left = 720 * (facing >= 0 ? 0.36 : 0.36)
-        let right = 720 * (facing >= 0 ? 0.56 : 0.56)
-        let top = 360 * 0.38
-        let bottom = 360 * 0.66
-        var desiredX = camX
-        var desiredY = camY
-        let sx = focusX - camX
-        let sy = focusY - camY
-        if sx < left { desiredX = focusX - left } else if sx > right { desiredX = focusX - right }
-        if sy < top { desiredY = focusY - top } else if sy > bottom { desiredY = focusY - bottom }
-        let k = immediately ? 1.0 : (1 - exp(-7 * dt))
-        camX += (desiredX - camX) * k
-        camY += (desiredY - camY) * k
-        camX = max(0, min(camX, max(0, level.width - 720)))
-        camY = max(0, min(camY, max(0, level.height - 360)))
+        _ = immediately; _ = dt
+        // Kept as a thin shim; follow logic lives in step().
+    }
 
-        trauma = max(0, trauma - dt * 1.5)
+    /// Apply camera follow smoothing + screen shake + world translation.
+    private func positionWorld() {
+        trauma = max(0, trauma - dtForShake * 1.5)
         let shake = trauma * trauma
         let shakeX = (sin(time * 47) * 0.5 + sin(time * 23) * 0.5) * 10 * shake
         let shakeY = (cos(time * 41) * 0.5 + sin(time * 19) * 0.5) * 7 * shake
-
-        cameraNode.position = CGPoint(x: camX + 360 + shakeX, y: camY + 180 + shakeY)
+        worldNode.position = CGPoint(x: -camX + shakeX, y: -camY + shakeY)
     }
+
+    private var dtForShake: CGFloat = 1/60
 
     // ── Render ────────────────────────────────────────────────────
 
