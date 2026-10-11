@@ -661,6 +661,21 @@ final class MossgateScene: SKScene {
                   + "jump=\(i.jump) down=\(i.down) menu=\(i.menu)")
         }
 
+        // What GameController actually reports, so the type derivation is checked
+        // against a real GCController rather than only in the abstract. Re-read
+        // here because this runs before the view lifecycle has called start().
+        GamepadManager.shared.refresh()
+        let attached = GamepadManager.shared.devices
+        if attached.isEmpty {
+            print("[Mossgate:PAD] no controller attached to report")
+        } else {
+            for d in attached {
+                print("[Mossgate:PAD] device name=\"\(d.name)\" type=\"\(d.type)\" "
+                      + "profile=\"\(d.profile)\" category=\"\(d.category)\" "
+                      + "| shown as: \(d.summary)")
+            }
+        }
+
         // Controller input must reach the physics, not just the flags.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
             guard let self else { return }

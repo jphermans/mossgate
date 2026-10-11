@@ -45,15 +45,34 @@ final class GamepadManager {
         return i
     }
 
+    /// What a connected controller is, for display.
+    struct DeviceInfo: Identifiable, Equatable {
+        var id: String { name + "|" + type + "|" + category }
+        /// `vendorName`, e.g. "Xbox Wireless Controller". Falls back to the
+        /// product category when the vendor is blank, which some MFi pads are.
+        var name: String
+        /// The controller family, from the concrete profile class.
+        var type: String
+        /// Which input profile it presents.
+        var profile: String
+        /// `productCategory`, e.g. "MFi" or "Xbox One".
+        var category: String
+
+        /// One line, e.g. "Xbox · extended gamepad".
+        var summary: String {
+            [type, profile].filter { !$0.isEmpty }.joined(separator: " · ")
+        }
+    }
+
     /// Input changes, on the main thread. Only fires when the state actually
     /// changes, so holding a direction does not spam the scene.
     var onInput: ((Input) -> Void)?
     /// Menu / Start pressed (rising edge).
     var onMenu: (() -> Void)?
-    /// The connected-controller list changed. Names are for the Setup screen.
-    var onDevicesChanged: (([String]) -> Void)?
+    /// The connected-controller list changed.
+    var onDevicesChanged: (([DeviceInfo]) -> Void)?
 
-    private(set) var devices: [String] = []
+    private(set) var devices: [DeviceInfo] = []
 
     private var observers: [NSObjectProtocol] = []
     private var watching = false
@@ -98,15 +117,43 @@ final class GamepadManager {
         emit(live)
     }
 
-    private static func describe(_ c: GCController) -> String {
+    private static func describe(_ c: GCController) -> DeviceInfo {
         let vendor = c.vendorName?.trimmingCharacters(in: .whitespaces) ?? ""
         let category = c.productCategory.trimmingCharacters(in: .whitespaces)
-        switch (vendor.isEmpty, category.isEmpty) {
-        case (true, true):   return "Game controller"
-        case (true, false):  return category
-        case (false, true):  return vendor
-        default:             return "\(vendor) · \(category)"
+        let fallback = category.isEmpty ? "Game controller" : category
+        return DeviceInfo(name: vendor.isEmpty ? fallback : vendor,
+                          type: family(c),
+                          profile: profileName(c),
+                          category: category)
+    }
+
+    /// Which family the controller belongs to.
+    ///
+    /// GameController distinguishes PlayStation and Xbox hardware by handing back
+    /// a concrete `GCExtendedGamepad` subclass — `GCXboxGamepad`,
+    /// `GCDualSenseGamepad`, `GCDualShockGamepad` — so the class is the reliable
+    /// way to name it. Anything else presenting an extended pad is generic MFi.
+    private static func family(_ c: GCController) -> String {
+        if let pad = c.extendedGamepad {
+            if pad is GCDualSenseGamepad { return "PlayStation DualSense" }
+            if pad is GCDualShockGamepad { return "PlayStation DualShock" }
+            if pad is GCXboxGamepad { return "Xbox" }
+            return "MFi gamepad"
         }
+        if let micro = c.microGamepad {
+            // The 2nd-generation Siri Remote presents a directional pad, which is
+            // a GCMicroGamepad subclass rather than its own property.
+            return micro is GCDirectionalGamepad ? "Directional pad" : "Siri Remote"
+        }
+        return "Game controller"
+    }
+
+    private static func profileName(_ c: GCController) -> String {
+        if c.extendedGamepad != nil { return "extended gamepad" }
+        if let micro = c.microGamepad {
+            return micro is GCDirectionalGamepad ? "directional pad" : "micro gamepad"
+        }
+        return "unknown profile"
     }
 
     private static func snapshot(_ pad: GCExtendedGamepad) -> Input {
@@ -170,6 +217,7 @@ final class GamepadManager {
 @MainActor
 final class ControllerList: ObservableObject {
     static let shared = ControllerList()
-    @Published var names: [String] = []
+    @Published var infos: [GamepadManager.DeviceInfo] = []
+    var names: [String] { infos.map(\.name) }
     private init() {}
 }

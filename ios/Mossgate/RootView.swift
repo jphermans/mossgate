@@ -165,8 +165,8 @@ struct RootView: View {
                                       jump: input.jump, down: input.down)
         }
         pad.onMenu = { session.scene?.pause() }
-        pad.onDevicesChanged = { names in
-            DispatchQueue.main.async { ControllerList.shared.names = names }
+        pad.onDevicesChanged = { infos in
+            DispatchQueue.main.async { ControllerList.shared.infos = infos }
         }
         pad.start()
     }

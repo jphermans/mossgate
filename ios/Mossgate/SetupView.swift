@@ -108,7 +108,7 @@ struct SetupView: View {
         VStack(alignment: .leading, spacing: 10) {
             toggleRow(
                 title: "Game controller",
-                blurb: controllers.names.isEmpty
+                blurb: controllers.infos.isEmpty
                     ? "No controller connected"
                     : controllers.names.joined(separator: ", "),
                 // Must be the real Published binding. A hand-rolled
@@ -118,11 +118,28 @@ struct SetupView: View {
                 isOn: $settings.controllerOn
             )
             if settings.controllerOn {
-                if controllers.names.isEmpty {
+                if controllers.infos.isEmpty {
                     Text("Pair one in iOS Settings › Bluetooth. Mossgate picks it up on its own — nothing to configure here.")
                         .font(.system(size: 11))
                         .foregroundStyle(Color("MossgateMuted"))
                         .padding(.horizontal, 4)
+                } else {
+                    // What's attached and what kind it is. The type comes from the
+                    // concrete profile class, so an Xbox pad reads "Xbox" rather
+                    // than the generic "extended gamepad".
+                    VStack(spacing: 6) {
+                        ForEach(controllers.infos) { info in
+                            mappingRow("Type", info.summary)
+                            if !info.category.isEmpty, info.category != info.name {
+                                mappingRow("Category", info.category)
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color("MossgateSurface").opacity(0.6))
+                    )
                 }
                 VStack(spacing: 6) {
                     mappingRow("Jump", "A  ·  d-pad up")
@@ -144,7 +161,7 @@ struct SetupView: View {
             Text(label)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Color("MossgateCream"))
-                .frame(width: 54, alignment: .leading)
+                .frame(width: 64, alignment: .leading)
             Text(keys)
                 .font(.system(size: 12))
                 .foregroundStyle(Color("MossgateMuted"))
