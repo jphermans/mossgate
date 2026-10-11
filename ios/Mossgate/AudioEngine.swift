@@ -244,11 +244,38 @@ final class AudioEngine {
         noise(dur: 0.25, vol: 0.06, cutoff: 180)
     }
 
+    /// Gate reached. A rising pickup into a sustained C major chord with a bell
+    /// shimmer on top — a phrase rather than one blip, so the reward moment
+    /// sounds different in kind from the pickup noises, not just louder.
+    ///
+    /// Every note goes into ONE rendered buffer: scheduling them separately
+    /// would queue them end to end and the chord would come out as an arpeggio.
     func win() {
-        [523, 659, 784, 1046].enumerated().forEach { i, freq in
-            tone(freqFrom: Double(freq), freqTo: Double(freq) * 1.01, dur: 0.2,
-                 type: .triangle, vol: 0.06, delay: Double(i) * 0.09)
+        var notes: [Note] = [
+            // Pickup: G4 – C5 – E5, quick and even.
+            Note(freq: 391.995, dur: 0.13, rel: 0.50),
+            Note(freq: 523.251, dur: 0.13, rel: 0.50, at: 0.11),
+            Note(freq: 659.255, dur: 0.14, rel: 0.52, at: 0.22),
+            // Arrival note, held so the chord below grows out of it. A little
+            // sawtooth edge to make the moment cut through.
+            Note(freq: 783.991, dur: 0.70, type: .sawtooth, rel: 0.55,
+                 at: 0.33, sustain: 0.45),
+        ]
+        // The chord lands: C major, with a low root for body.
+        let at = 0.62
+        for f in [523.251, 659.255, 783.991, 1046.502] {
+            notes.append(Note(freq: f, dur: 1.05, rel: 0.28, at: at, sustain: 0.5))
         }
+        notes.append(Note(freq: 130.813, dur: 1.15, type: .sine, rel: 0.32,
+                          at: at, sustain: 0.45))
+        // Bell shimmer above, like light through the opened gate.
+        notes.append(Note(freq: 1567.982, dur: 0.95, type: .sine, rel: 0.09,
+                          at: at + 0.05, sustain: 0.15))
+        notes.append(Note(freq: 2093.005, dur: 0.85, type: .sine, rel: 0.06,
+                          at: at + 0.13, sustain: 0.15))
+
+        guard let buffer = render(notes, vol: 0.075) else { return }
+        scheduleSFX(buffer)
     }
 
     func tap() {
@@ -266,70 +293,108 @@ final class AudioEngine {
         max(1, min(24, Int(20_000.0 / max(abs(f), 1.0))))
     }
 
-    private func tone(freqFrom: Double, freqTo: Double, dur: Double,
-                     type: WaveformType, vol: Double, delay: Double = 0) {
-        guard settings.sfxOn else { return }
-        let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
+    /// One note inside a rendered effect.
+    private struct Note {
+        var freq: Double
+        var dur: Double
+        var type: WaveformType = .triangle
+        /// Level relative to the other notes of the same effect. The finished
+        /// effect is normalised as a whole, so this is a mix balance, not a
+        /// volume.
+        var rel: Double = 1
+        /// Offset from the start of the effect, in seconds.
+        var at: Double = 0
+        /// Fraction of the note held at full level before the decay begins.
+        var sustain: Double = 0
+        /// Optional pitch-sweep target; nil means constant pitch.
+        var to: Double? = nil
+    }
+
+    /// Renders notes into a **single** buffer so they sound together.
+    ///
+    /// This matters: `AVAudioPlayerNode` plays scheduled buffers one after
+    /// another, so giving each note its own buffer with leading silence does not
+    /// overlap them at all — it just plays them in sequence. Anything meant to
+    /// be heard as a chord has to be summed into one buffer.
+    private func render(_ notes: [Note], vol: Double) -> AVAudioPCMBuffer? {
+        guard settings.sfxOn, !notes.isEmpty else { return nil }
+        let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
         let sr = format.sampleRate
-        let frameTotal = AVAudioFrameCount((dur + delay) * sr)
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameTotal) else { return }
-        buffer.frameLength = frameTotal
+        let total = notes.map { $0.at + $0.dur }.max() ?? 0
+        let frames = AVAudioFrameCount(total * sr)
+        guard frames > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frames) else { return nil }
+        buffer.frameLength = frames
 
         let data = buffer.floatChannelData![0]
-        for i in 0..<Int(frameTotal) { data[i] = 0 }
+        for i in 0..<Int(frames) { data[i] = 0 }
 
-        let startSample = Int(delay * sr)
-        let durSamples = Int(dur * sr)
-        guard durSamples > 0 else { return }
+        for n in notes {
+            let count = Int(n.dur * sr)
+            guard count > 0 else { continue }
+            let start = Int(n.at * sr)
+            let top = n.to ?? n.freq
+            let harmonics = Self.harmonicLimit(max(abs(n.freq), abs(top)))
+            let attack = min(0.004 * sr, Double(count) * 0.3)        // 4 ms, never the whole note
+            let sustainEnd = attack + Double(count) * min(max(n.sustain, 0), 0.95)
 
-        let harmonics = Self.harmonicLimit(max(abs(freqFrom), abs(freqTo)))
-        let attack = min(0.004 * sr, Double(durSamples) * 0.3)   // 4 ms, never the whole note
+            var phase = 0.0
+            for i in 0..<count {
+                let idx = start + i
+                if idx >= Int(frames) { break }
+                let progress = Double(i) / Double(count)
+                let freq = n.freq + (top - n.freq) * progress
 
-        var raw = [Float](repeating: 0, count: durSamples)
-        var phase = 0.0
-        var peak: Float = 0.0001
-        for i in 0..<durSamples {
-            let progress = Double(i) / Double(durSamples)
-            let freq = freqFrom + (freqTo - freqFrom) * progress
-
-            // Additive up to Nyquist, so no partial can alias. Triangle and
-            // saw use the standard alternating signs.
-            var s = 0.0
-            for k in 1...harmonics {
-                if type == .square && k % 2 == 0 { continue }
-                let a: Double
-                switch type {
-                case .sine:     a = (k == 1) ? 1 : 0
-                case .square:   a = 1.0 / Double(k)
-                case .triangle: a = 1.0 / Double(k * k) * (k % 4 == 1 ? 1 : -1)
-                case .sawtooth: a = 1.0 / Double(k) * (k % 2 == 1 ? 1 : -1)
+                // Additive up to Nyquist, so no partial can alias. Triangle and
+                // saw use the standard alternating signs.
+                var s = 0.0
+                for k in 1...harmonics {
+                    if n.type == .square && k % 2 == 0 { continue }
+                    let a: Double
+                    switch n.type {
+                    case .sine:     a = (k == 1) ? 1 : 0
+                    case .square:   a = 1.0 / Double(k)
+                    case .triangle: a = 1.0 / Double(k * k) * (k % 4 == 1 ? 1 : -1)
+                    case .sawtooth: a = 1.0 / Double(k) * (k % 2 == 1 ? 1 : -1)
+                    }
+                    if a != 0 { s += a * sin(Double(k) * phase) }
                 }
-                if a != 0 { s += a * sin(Double(k) * phase) }
-            }
 
-            // Attack then decay to silence: the old `(1 - progress)` started at
-            // full amplitude, which is a step discontinuity — an audible click.
-            let env: Double
-            if Double(i) < attack {
-                env = Double(i) / attack
-            } else {
-                env = 1.0 - (Double(i) - attack) / max(1.0, Double(durSamples) - attack)
-            }
-            let v = Float(s * env)
-            raw[i] = v
-            peak = max(peak, abs(v))
+                // 4 ms attack (a note starting at full amplitude is a step and
+                // therefore a click), an optional hold, then decay to silence.
+                let env: Double
+                if Double(i) < attack {
+                    env = Double(i) / attack
+                } else if Double(i) < sustainEnd {
+                    env = 1.0
+                } else {
+                    env = 1.0 - (Double(i) - sustainEnd) / max(1.0, Double(count) - sustainEnd)
+                }
+                data[idx] += Float(s * env * n.rel)
 
-            // Integrate the frequency. `2π · freq · t` is only correct for a
-            // constant pitch; on a sweep its derivative is freq + t·df/dt, which
-            // made the jump/coin/die glides warble.
-            phase += 2.0 * .pi * freq / sr
-            if phase > 2.0 * .pi { phase -= 2.0 * .pi * (phase / (2.0 * .pi)).rounded(.down) }
+                // Integrate the frequency. `2π · freq · t` is only correct for a
+                // constant pitch; on a sweep its derivative is freq + t·df/dt,
+                // which made the jump/coin/die glides warble.
+                phase += 2.0 * .pi * freq / sr
+                if phase > 2.0 * .pi { phase -= 2.0 * .pi * (phase / (2.0 * .pi)).rounded(.down) }
+            }
         }
 
-        // Normalise so each effect peaks at exactly `vol` whichever waveform it
-        // uses — consistent loudness across the whole set.
+        // Normalise the whole effect to `vol`, so every sound peaks at the same
+        // level whatever its shape and a dense chord cannot clip.
+        var peak: Float = 0.0001
+        for i in 0..<Int(frames) { peak = max(peak, abs(data[i])) }
         let gain = Float(vol) / peak
-        for i in 0..<durSamples { data[startSample + i] = raw[i] * gain }
+        for i in 0..<Int(frames) { data[i] *= gain }
+        return buffer
+    }
+
+    private func tone(freqFrom: Double, freqTo: Double, dur: Double,
+                      type: WaveformType, vol: Double, delay: Double = 0,
+                      sustain: Double = 0) {
+        guard let buffer = render([Note(freq: freqFrom, dur: dur, type: type,
+                                        rel: 1, at: delay, sustain: sustain, to: freqTo)],
+                                  vol: vol) else { return }
         scheduleSFX(buffer)
     }
 

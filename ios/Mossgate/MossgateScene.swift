@@ -60,6 +60,19 @@ final class MossgateScene: SKScene {
     private var camY: CGFloat = 0
     /// Extra downward camera offset while DOWN is held on solid ground.
     private var peekY: CGFloat = 0
+
+    /// `-PlaceAt x,y` test rig: where to put the player after every level load.
+    ///
+    /// Applied inside `loadLevel` rather than once at startup, because the
+    /// hosting view can call `startLevel` again on a layout pass and would
+    /// otherwise put the player straight back at the spawn.
+    private let placeAtOverride: CGPoint? = {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-PlaceAt"), i + 1 < args.count else { return nil }
+        let parts = args[i + 1].split(separator: ",").compactMap { Double($0) }
+        guard parts.count == 2 else { return nil }
+        return CGPoint(x: parts[0], y: parts[1])
+    }()
     private var trauma: CGFloat = 0
 
     // Hint system
@@ -456,26 +469,14 @@ final class MossgateScene: SKScene {
     func startLevel(_ index: Int) {
         loadLevel(index: index, toState: .play)
         runMoverTestIfRequested()
-        runPlaceAtHookIfRequested()
         runDeathTestHookIfRequested()
         runDownTestHookIfRequested()
         runDropTestHookIfRequested()
         runSfxTestHookIfRequested()
     }
 
-    /// Test hook: `-PlaceAt x,y` teleports the player, so a screenshot can be
-    /// taken anywhere in a level. Used to photograph moving platforms, which
-    /// are otherwise often just off the edge of the camera's view.
-    private func runPlaceAtHookIfRequested() {
-        let args = ProcessInfo.processInfo.arguments
-        guard let i = args.firstIndex(of: "-PlaceAt"), i + 1 < args.count else { return }
-        let parts = args[i + 1].split(separator: ",").compactMap { Double($0) }
-        guard parts.count == 2 else { return }
-        playerX = CGFloat(parts[0])
-        playerY = CGFloat(parts[1])
-        playerVx = 0
-        playerVy = 0
-    }
+    /// Test hook: `-PlaceAt x,y` is handled by `placeAtOverride` inside
+    /// `loadLevel` (see the property), so a re-entrant `startLevel` can't wipe it.
 
     /// Test hook: `-TestMovers 1` walks every level's movers across a full
     /// period using the same curve `placeMovers()` applies, and reports any
@@ -808,10 +809,13 @@ final class MossgateScene: SKScene {
                            height: Phys.playerH * 1.6 * viewScale)
         playerNode = SKSpriteNode(texture: idleFrames.first, color: .white, size: pSize)
         addWorldChild(playerNode)
-        placePlayer(at: level.spawn)
+        // Test rig: -PlaceAt overrides the spawn (applied here, not once at
+        // startup, so a re-entrant startLevel from the hosting view can't undo it).
+        let start = placeAtOverride ?? level.spawn
+        placePlayer(at: start)
 
-        camX = clamp(level.spawn.x - 180, 0, max(0, level.width - 720))
-        camY = clamp(level.spawn.y - 280, 0, max(0, level.height - 360))
+        camX = clamp(start.x - 180, 0, max(0, level.width - 720))
+        camY = clamp(start.y - 280, 0, max(0, level.height - 360))
         isLoaded = true
         // DEBUG: append loadLevel state to file
         let loadInfo = """
