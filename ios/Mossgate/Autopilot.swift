@@ -596,12 +596,25 @@ enum Autopilot {
         return candidate
     }
 
+    /// The closest surface to a point, for when nothing is directly under it — a coin
+    /// over a pit has no ground below to be jumped from.
+    private static func nearestSurface(to p: CGPoint, level: Level) -> CGPoint? {
+        var best: (d: CGFloat, top: CGFloat, x: CGFloat)?
+        for s in level.solids {
+            let cx = min(max(p.x, s.x + 12), max(s.x + 12, s.x + s.w - 12))
+            let d = abs(cx - p.x) + abs(s.y - p.y) * 0.25
+            if best == nil || d < best!.d { best = (d, s.y, cx) }
+        }
+        guard let b = best else { return nil }
+        return CGPoint(x: b.x, y: b.top)
+    }
+
     /// A home for a coin, proven collectible before it is accepted.
     ///
     /// Candidates are tried in order of preference — the probed arc first, so coins
     /// still move around and vary with the seed — but each is checked against the
     /// game's own pickup rule and only a passing one is used. The last resort is
-    /// directly above the surface below the anchor, which a standing jump cannot miss.
+    /// directly above the nearest surface, which a standing jump cannot miss.
     ///
     /// This is the difference between believing a coin is reachable because the
     /// placement maths looks right, and knowing it: 55 of 214 coins were unreachable
@@ -614,9 +627,11 @@ enum Autopilot {
             candidates.append(arc)
         }
         candidates.append(nudged(anchor, index: index, level: level, seed: seed))
-        if let ground = surfaceBelow(anchor, level: level) {
-            candidates.append(CGPoint(x: anchor.x, y: ground.y - 70))
-            candidates.append(CGPoint(x: anchor.x, y: ground.y - 48))
+        // Ground directly below the anchor if there is any, otherwise the nearest
+        // surface at all — a coin over a pit would otherwise have nowhere to go.
+        if let ground = surfaceBelow(anchor, level: level) ?? nearestSurface(to: anchor, level: level) {
+            candidates.append(CGPoint(x: ground.x, y: ground.y - 70))
+            candidates.append(CGPoint(x: ground.x, y: ground.y - 48))
             candidates.append(CGPoint(x: ground.x, y: ground.y - 60))
         }
         for c in candidates where collectible(c, level: level, phase: phase, period: period) {
