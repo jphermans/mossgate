@@ -21,18 +21,33 @@ struct GameHUDView: View {
     }
 
     private var pill: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(Color("MossgateLantern"))
-                .frame(width: 8, height: 8)
-            Text("\(hud.coins)/\(hud.total)")
-                .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Color("MossgateCream"))
-            HStack(spacing: 2) {
-                ForEach(0..<2, id: \.self) { i in
+        HStack(spacing: 10) {
+            // Coins
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(Color("MossgateLantern"))
+                    .frame(width: 8, height: 8)
+                Text("\(hud.coins)/\(hud.total)")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color("MossgateCream"))
+            }
+            // Lanterns collected in this level
+            if hud.lanternsTotal > 0 {
+                HStack(spacing: 5) {
+                    Image(systemName: "flame.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color("MossgateLantern"))
+                    Text("\(hud.lanterns)/\(hud.lanternsTotal)")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color("MossgateCream"))
+                }
+            }
+            // Light (lives)
+            HStack(spacing: 3) {
+                ForEach(0..<hud.maxLives, id: \.self) { i in
                     RoundedRectangle(cornerRadius: 1.5)
-                        .fill(i < hud.jumps ? Color("MossgateLantern") : Color("MossgateBorder"))
-                        .frame(width: 14, height: 5)
+                        .fill(i < hud.lives ? Color("MossgateLantern") : Color("MossgateBorder"))
+                        .frame(width: 12, height: 5)
                 }
             }
         }
@@ -156,9 +171,12 @@ struct OverlayPanel: View {
     let phase: GameState
     let hud: MossgateScene.HudInfo
     let onResume: () -> Void
-    let onRetry: () -> Void
+    /// `nil` when there is no way to continue in place (out of light).
+    let onRetry: (() -> Void)?
     let onQuit: () -> Void
     let onNext: (() -> Void)?
+
+    private var outOfLight: Bool { phase == .dead && hud.lives <= 0 }
 
     var body: some View {
         ZStack {
@@ -174,8 +192,13 @@ struct OverlayPanel: View {
                         .padding(.horizontal, 18)
                 }
                 VStack(spacing: 8) {
-                    primaryButton
-                    secondaryButton
+                    if let onRetry {
+                        primaryButton(action: {
+                            // Pause resumes; death and win both restart.
+                            if phase == .pause { onResume() } else { onRetry() }
+                        })
+                        secondaryButton(action: onRetry)
+                    }
                     if let onNext = onNext {
                         Button(action: onNext) {
                             Text("Next gate")
@@ -189,9 +212,9 @@ struct OverlayPanel: View {
                         }
                     }
                     Button(action: onQuit) {
-                        Text("All gates")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color("MossgateMuted"))
+                        Text(outOfLight ? "Back to the gates" : "All gates")
+                            .font(.system(size: 14, weight: outOfLight ? .semibold : .regular))
+                            .foregroundStyle(outOfLight ? Color("MossgateCream") : Color("MossgateMuted"))
                             .frame(maxWidth: .infinity, minHeight: 38)
                     }
                 }
@@ -211,23 +234,26 @@ struct OverlayPanel: View {
     }
 
     private var eyebrow: some View {
-        Text(eyebrowText)
+        Text(outOfLight ? "DARK" : eyebrowText)
             .font(.system(size: 11, weight: .semibold))
             .tracking(4)
             .foregroundStyle(Color("MossgateLantern"))
     }
 
     private var title: some View {
-        Text(titleText)
+        Text(outOfLight ? "The lantern is out" : titleText)
             .font(.system(size: 32, weight: .semibold, design: .serif))
             .foregroundStyle(Color("MossgateCream"))
             .multilineTextAlignment(.center)
     }
 
     private var subtitle: String? {
+        if outOfLight {
+            return "Out of light. Return to the gates to relight the lantern."
+        }
         switch phase {
         case .pause: return hud.levelName
-        case .dead:  return "The wick went out. Try again."
+        case .dead:  return "The wick went out. \(hud.lives) of \(hud.maxLives) left."
         case .win:   return "\(hud.coins) of \(hud.total) coins."
         default:     return nil
         }
@@ -251,8 +277,8 @@ struct OverlayPanel: View {
         }
     }
 
-    private var primaryButton: some View {
-        Button(action: primaryAction) {
+    private func primaryButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Text(primaryText)
                 .font(.system(size: 16, weight: .semibold))
                 .frame(maxWidth: .infinity, minHeight: 46)
@@ -272,17 +298,8 @@ struct OverlayPanel: View {
         }
     }
 
-    private func primaryAction() {
-        switch phase {
-        case .pause: onResume()
-        case .dead:  onRetry()
-        case .win:   onRetry()
-        default:     break
-        }
-    }
-
-    private var secondaryButton: some View {
-        Button(action: onRetry) {
+    private func secondaryButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             Text("Restart level")
                 .font(.system(size: 14, weight: .semibold))
                 .frame(maxWidth: .infinity, minHeight: 40)

@@ -38,14 +38,19 @@ struct RootView: View {
                     }
                 )
                 .transition(.opacity)
-                .sheet(isPresented: $showSetup) {
-                    SetupView(onDone: { showSetup = false })
-                }
 
             case .game:
                 gameStack
                     .transition(.opacity)
             }
+        }
+        // Sheet must be attached to a stable parent — not inside the switch,
+        // otherwise it gets torn down the moment `phase` changes and never
+        // appears. Medium detents so it doesn't cover the full screen.
+        .sheet(isPresented: $showSetup) {
+            SetupView(onDone: { showSetup = false })
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .onChange(of: phase) { _, newValue in
             AppDelegate.orientationLock = (newValue == .splash) ? .portrait : .landscape
@@ -57,6 +62,10 @@ struct RootView: View {
         .onAppear {
                     AppDelegate.orientationLock = .portrait
                     let args = ProcessInfo.processInfo.arguments
+                    // Test hook: -OpenSetup 1 lands on the title screen with the
+                    // Setup sheet already presented (used to verify the sheet
+                    // wiring without a simulator tap).
+                    let wantsSetup = args.contains("-OpenSetup")
                     // Test hook: -SkipSplash 1 skips past the splash screen.
                     // Optional second arg -StartInLevel N jumps straight into level N (test rigs).
                     if let i = args.firstIndex(of: "-StartInLevel"),
@@ -67,9 +76,14 @@ struct RootView: View {
                             gameLevelIndex = idx
                             phase = .game
                         }
-                    } else if UserDefaults.standard.bool(forKey: "SkipSplash") {
+                    } else if UserDefaults.standard.bool(forKey: "SkipSplash") || wantsSetup {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                             withAnimation(.easeInOut(duration: 0.35)) { phase = .title }
+                            if wantsSetup {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    showSetup = true
+                                }
+                            }
                         }
                     }
                 }
@@ -93,8 +107,15 @@ struct RootView: View {
                     phase: hud.phase,
                     hud: hud,
                     onResume: { session.scene?.resume() },
-                    onRetry:  { session.scene?.retryLevel() },
-                    onQuit:   { withAnimation(.easeInOut(duration: 0.25)) { phase = .title } },
+                    // Out of light: no retry — the only way on is back to the
+                    // gates, which refills the lantern to full.
+                    onRetry: (hud.phase == .dead && hud.lives <= 0)
+                             ? nil
+                             : { session.scene?.retryLevel() },
+                    onQuit:   {
+                        if hud.lives <= 0 { SettingsStore.shared.refillLives() }
+                        withAnimation(.easeInOut(duration: 0.25)) { phase = .title }
+                    },
                     onNext:   hud.phase == .win && gameLevelIndex < Levels.all.count - 1
                               ? { session.scene?.nextLevel(); gameLevelIndex += 1 }
                               : nil
@@ -122,6 +143,7 @@ struct RootView: View {
 
 extension MossgateScene.HudInfo {
     static let empty = MossgateScene.HudInfo(
-        phase: .title, levelName: "", coins: 0, total: 0, cleared: false, jumps: 2
+        phase: .title, levelName: "", coins: 0, total: 0, cleared: false, jumps: 2,
+        lanterns: 0, lanternsTotal: 0, lives: SettingsStore.maxLives, maxLives: SettingsStore.maxLives
     )
 }

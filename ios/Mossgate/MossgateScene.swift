@@ -38,6 +38,7 @@ final class MossgateScene: SKScene {
 
     // Progress
     private var coinsGot: Set<Int> = []
+    private var lanternsGot: Set<Int> = []
     private var cp: Int = -1
     private var spawnPoint: CGPoint = .zero
     private var checkpointSnap: (point: CGPoint, coins: [Int], cp: Int)?
@@ -66,6 +67,7 @@ final class MossgateScene: SKScene {
     private var hudNode = SKNode()
     private var playerNode: SKSpriteNode!
     private var coinNodes: [SKSpriteNode] = []
+    private var lanternNodes: [SKSpriteNode] = []
     private var spikeNodes: [SKSpriteNode] = []
     private var solidNodes: [SKSpriteNode] = []
     private var moverNodes: [SKSpriteNode] = []
@@ -88,9 +90,11 @@ final class MossgateScene: SKScene {
     private var blockTexture: SKTexture!
     private var ledgeTexture: SKTexture!
     private var skyTexture: SKTexture?
-    private var emberSkyTexture: SKTexture?
     private var moonTexture: SKTexture?
-    private var skyNode: SKNode?
+    /// Sky textures keyed by "<world>-<height>", so switching levels doesn't
+    /// rebuild the same gradient image.
+    private var skyCache: [String: SKTexture] = [:]
+    private var lanternTexture: SKTexture?
 
     // Callbacks to SwiftUI
     var onPhaseChange: ((GameState, HudInfo) -> Void)?
@@ -131,6 +135,12 @@ final class MossgateScene: SKScene {
         let total: Int
         let cleared: Bool
         let jumps: Int
+        /// Lanterns collected this level / total in the level.
+        let lanterns: Int
+        let lanternsTotal: Int
+        /// Remaining light (lives) and the cap.
+        let lives: Int
+        let maxLives: Int
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────
@@ -209,40 +219,101 @@ final class MossgateScene: SKScene {
         blockTexture.filteringMode = .nearest
         ledgeTexture.filteringMode = .nearest
 
-        // Procedurally generated sky textures (one per world so the mood shifts
-        // between Mossgate Dusk and Ember Caves). Reused across levels.
-        skyTexture = makeSkyTexture(seed: 0x4D_6F_73)
-        emberSkyTexture = makeSkyTexture(seed: 0x45_6D_62, ember: true)
+        // Moon + lantern pickup art. The sky is generated per level (it depends
+        // on the level height, so it can't be cached across levels).
         moonTexture = makeMoonTexture()
+        lanternTexture = makeLanternTexture()
+    }
+
+    // MARK: - Procedural lantern pickup
+
+    /// A small lit lantern you can pick up. The wick glows with the same warm
+    /// amber as the player's lantern so the player feels like they're
+    /// "gathering light" for the journey ahead.
+    private func makeLanternTexture() -> SKTexture {
+        let size = CGSize(width: 64, height: 64)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            let cg = ctx.cgContext
+            let space = CGColorSpaceCreateDeviceRGB()
+            // Outer glow halo
+            let halo   = UIColor(red: 1.0, green: 0.78, blue: 0.40, alpha: 0.0).cgColor
+            let haloIn = UIColor(red: 1.0, green: 0.78, blue: 0.40, alpha: 0.45).cgColor
+            let haloColors = [haloIn, halo] as CFArray
+            let haloStops: [CGFloat] = [0, 1]
+            let haloGrad = CGGradient(colorsSpace: space, colors: haloColors, locations: haloStops)!
+            cg.drawRadialGradient(haloGrad,
+                                  startCenter: CGPoint(x: size.width/2, y: size.height/2 + 4),
+                                  startRadius: 0,
+                                  endCenter:   CGPoint(x: size.width/2, y: size.height/2 + 4),
+                                  endRadius:   size.width/2,
+                                  options: [])
+
+            // Top loop / handle
+            UIColor(red: 0.35, green: 0.22, blue: 0.10, alpha: 1).setStroke()
+            cg.setLineWidth(2)
+            cg.addArc(center: CGPoint(x: size.width/2, y: size.height/2 - 8),
+                      radius: 5, startAngle: .pi, endAngle: 0, clockwise: true)
+            cg.strokePath()
+
+            // Body (dark glass with warm glow inside)
+            let body = CGRect(x: size.width/2 - 10, y: size.height/2 - 8, width: 20, height: 18)
+            UIColor(red: 0.15, green: 0.10, blue: 0.06, alpha: 1).setFill()
+            UIBezierPath(roundedRect: body, cornerRadius: 3).fill()
+
+            // Inner glow
+            let innerColors = [
+                UIColor(red: 1.0, green: 0.92, blue: 0.70, alpha: 1).cgColor,
+                UIColor(red: 1.0, green: 0.70, blue: 0.30, alpha: 0.8).cgColor,
+            ] as CFArray
+            let innerStops: [CGFloat] = [0, 1]
+            let innerGrad = CGGradient(colorsSpace: space, colors: innerColors, locations: innerStops)!
+            cg.saveGState()
+            UIBezierPath(roundedRect: body.insetBy(dx: 3, dy: 3), cornerRadius: 2).addClip()
+            cg.drawLinearGradient(innerGrad,
+                                  start: CGPoint(x: body.midX, y: body.minY),
+                                  end:   CGPoint(x: body.midX, y: body.maxY),
+                                  options: [])
+            cg.restoreGState()
+
+            // Base
+            UIColor(red: 0.25, green: 0.16, blue: 0.08, alpha: 1).setFill()
+            UIBezierPath(roundedRect: CGRect(x: size.width/2 - 12, y: size.height/2 + 10, width: 24, height: 4),
+                         cornerRadius: 1).fill()
+        }
+        let tex = SKTexture(image: image)
+        tex.filteringMode = .linear
+        return tex
     }
 
     // MARK: - Procedural sky
 
-    /// Builds a 256x256 dusk-sky tile: gradient + scattered stars. Reused as a
-    /// background fill via SKSpriteNode. `ember = true` shifts the palette to
-    /// the warm lava world look.
-    private func makeSkyTexture(seed: UInt64, ember: Bool = false) -> SKTexture {
-        let size = CGSize(width: 256, height: 256)
+    /// Builds the sky texture for one level: a vertical gradient plus scattered
+    /// stars, generated at `512 x height` so a single tile spans the level's
+    /// full height and the gradient never visibly repeats.
+    /// `ember = true` shifts the palette to the warm lava world look.
+    private func makeSkyTexture(seed: UInt64, ember: Bool = false, height: CGFloat = 760) -> SKTexture {
+        let size = CGSize(width: 512, height: max(256, height))
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { ctx in
             let cg = ctx.cgContext
             let top, mid1, mid2, bottom: UIColor
             if ember {
-                // Ember Caves: warm, smoky, lava-glow at the bottom
-                top    = UIColor(red: 0.10, green: 0.06, blue: 0.05, alpha: 1)
-                mid1   = UIColor(red: 0.30, green: 0.10, blue: 0.05, alpha: 1)
-                mid2   = UIColor(red: 0.42, green: 0.18, blue: 0.05, alpha: 1)
-                bottom = UIColor(red: 0.20, green: 0.06, blue: 0.02, alpha: 1)
+                // Ember Caves: warm, smoky, lava-glow near the horizon.
+                top    = UIColor(red: 0.07, green: 0.04, blue: 0.04, alpha: 1)
+                mid1   = UIColor(red: 0.22, green: 0.08, blue: 0.04, alpha: 1)
+                mid2   = UIColor(red: 0.34, green: 0.14, blue: 0.05, alpha: 1)
+                bottom = UIColor(red: 0.10, green: 0.05, blue: 0.03, alpha: 1)
             } else {
-                // Mossgate Dusk: deep teal at top, amber glow at horizon
-                top    = UIColor(red: 0.027, green: 0.078, blue: 0.110, alpha: 1)
-                mid1   = UIColor(red: 0.071, green: 0.180, blue: 0.227, alpha: 1)
-                mid2   = UIColor(red: 0.110, green: 0.220, blue: 0.200, alpha: 1)
-                bottom = UIColor(red: 0.110, green: 0.140, blue: 0.110, alpha: 1)
+                // Mossgate Dusk: deep teal night sky, amber-lit green low down.
+                top    = UIColor(red: 0.020, green: 0.058, blue: 0.086, alpha: 1)
+                mid1   = UIColor(red: 0.043, green: 0.118, blue: 0.165, alpha: 1)
+                mid2   = UIColor(red: 0.075, green: 0.180, blue: 0.176, alpha: 1)
+                bottom = UIColor(red: 0.055, green: 0.098, blue: 0.094, alpha: 1)
             }
             let space = CGColorSpaceCreateDeviceRGB()
             let colors = [top.cgColor, mid1.cgColor, mid2.cgColor, bottom.cgColor] as CFArray
-            let stops: [CGFloat] = [0, 0.45, 0.75, 1.0]
+            let stops: [CGFloat] = [0, 0.40, 0.78, 1.0]
             let gradient = CGGradient(colorsSpace: space, colors: colors, locations: stops)!
             cg.drawLinearGradient(gradient,
                                   start: CGPoint(x: 0, y: 0),
@@ -250,20 +321,21 @@ final class MossgateScene: SKScene {
                                   options: [])
 
             // Stars / embers — deterministic per seed so the same level always
-            // shows the same pattern. Cheap to draw (a few dozen small circles).
+            // shows the same pattern. Density scales with the canvas height.
             var rng = SplitMix64(state: seed)
-            for _ in 0..<48 {
+            let count = Int(size.height / 6)
+            for _ in 0..<count {
                 let x = CGFloat(rng.next() % UInt64(size.width))
-                let y = CGFloat(rng.next() % UInt64(size.height * 3 / 4)) // keep stars in upper sky
+                let y = CGFloat(rng.next() % UInt64(size.height * 3 / 4)) // upper sky
                 let r = ember
-                    ? CGFloat(rng.next() % 2) + 1.0   // embers: tiny
-                    : CGFloat(rng.next() % 2) + 0.6   // stars: small
+                    ? CGFloat(rng.next() % 3) + 1.0
+                    : CGFloat(rng.next() % 3) + 0.8
                 let a = ember
-                    ? CGFloat(0.5 + Double(rng.next() % 50) / 100.0)
-                    : CGFloat(0.6 + Double(rng.next() % 40) / 100.0)
+                    ? CGFloat(0.40 + Double(rng.next() % 40) / 100.0)
+                    : CGFloat(0.45 + Double(rng.next() % 45) / 100.0)
                 let color: UIColor = ember
-                    ? UIColor(red: 1.0, green: 0.65, blue: 0.30, alpha: a)
-                    : UIColor(red: 1.0, green: 0.95, blue: 0.78, alpha: a)
+                    ? UIColor(red: 1.0, green: 0.62, blue: 0.28, alpha: a)
+                    : UIColor(red: 1.0, green: 0.96, blue: 0.82, alpha: a)
                 color.setFill()
                 cg.fillEllipse(in: CGRect(x: x, y: y, width: r, height: r))
             }
@@ -305,35 +377,72 @@ final class MossgateScene: SKScene {
 
     /// Build and add the sky to the worldNode (scrolls with the camera).
     /// `worldId == 0` is Mossgate Dusk (teal), `1` is Ember Caves (warm).
+    ///
+    /// The gradient is generated at the level's full height so a single row of
+    /// columns covers the sky with no vertically repeating bands; only the
+    /// horizontal direction needs tiling.
     private func addSky() {
-        // Remove any prior sky so reloading a level doesn't stack them.
-        skyNode?.removeFromParent()
         let isEmber = (level.world == 1)
-        let bgTex = isEmber ? (emberSkyTexture ?? skyTexture) : skyTexture
-        let tileW = 256.0 * viewScale
-        let tileH = 360.0 * viewScale   // taller than world height so vertical scroll doesn't expose edges
-        let cols = Int(ceil(level.width / 256.0)) + 1
-        let rows = Int(ceil(level.height / tileH * (256.0/360.0))) + 1
+
+        // Cache one sky per (world, height) — levels in the same world usually
+        // share a height, so this avoids regenerating the image every load.
+        let key = "\(level.world)-\(Int(level.height))"
+        if let cached = skyCache[key] {
+            skyTexture = cached
+        } else {
+            let tex = makeSkyTexture(seed: isEmber ? 0x45_6D_62 : 0x4D_6F_73,
+                                     ember: isEmber,
+                                     height: level.height)
+            skyCache[key] = tex
+            skyTexture = tex
+        }
+        guard let bgTex = skyTexture else { return }
+
+        // One row: each column spans the whole level height.
+        let tileWorldW: CGFloat = 512
+        let cols = Int(ceil(level.width / tileWorldW)) + 1
+        let skyH = level.height * viewScale
+        let skyCenterY = (level.height / 2) * viewScale
+
         for col in 0..<cols {
-            for row in 0..<rows {
-                let tile = SKSpriteNode(texture: bgTex)
-                tile.size = CGSize(width: tileW, height: tileH)
-                tile.position = CGPoint(x: (Double(col) + 0.5) * tileW,
-                                        y: (Double(row) + 0.5) * tileH)
-                tile.zPosition = -100
-                worldNode.addChild(tile)
-            }
+            let tile = SKSpriteNode(texture: bgTex)
+            tile.size = CGSize(width: tileWorldW * viewScale, height: skyH)
+            tile.position = CGPoint(x: (CGFloat(col) * tileWorldW + tileWorldW/2) * viewScale,
+                                    y: skyCenterY)
+            tile.zPosition = -1000          // behind every other world child
+            addWorldChild(tile)
         }
 
-        // Moon (only in Mossgate Dusk — Ember Caves doesn't have a moon).
+        // Moon — only in Mossgate Dusk. Placed where the opening camera actually
+        // looks (below the top of the view, above the ground line), so it's on
+        // screen at the start of a level rather than stranded out of frame.
         if !isEmber, let moon = moonTexture {
             let moonNode = SKSpriteNode(texture: moon)
-            moonNode.size = CGSize(width: 96 * viewScale, height: 96 * viewScale)
-            moonNode.position = CGPoint(x: 220 * viewScale, y: 120 * viewScale)
-            moonNode.zPosition = -90
+            moonNode.size = CGSize(width: 120 * viewScale, height: 120 * viewScale)
+            let moonWorldY = max(110, level.height * 0.44)
+            moonNode.position = CGPoint(x: 320 * viewScale, y: moonWorldY * viewScale)
+            moonNode.zPosition = -900
             moonNode.blendMode = .add   // warm glow against the teal sky
-            worldNode.addChild(moonNode)
+            addWorldChild(moonNode)
         }
+    }
+
+    // MARK: - World hierarchy helper
+
+    /// Adds a node to the world, counter-flipping SKSpriteNodes vertically.
+    ///
+    /// `worldNode` carries `yScale = -1` so the engine's y-down world maps onto
+    /// SpriteKit's y-up scene coordinates. That flip also mirrors every sprite
+    /// image, so each sprite gets an equal and opposite `yScale = -1` (net +1 →
+    /// upright) while its *position* still benefits from the world mapping.
+    /// SKShapeNodes (particles) are symmetric squares and need no flip.
+    @discardableResult
+    private func addWorldChild(_ node: SKNode) -> SKNode {
+        if let sprite = node as? SKSpriteNode {
+            sprite.yScale = -1
+        }
+        worldNode.addChild(node)
+        return node
     }
 
     // ── Level setup ───────────────────────────────────────────────
@@ -387,8 +496,8 @@ final class MossgateScene: SKScene {
         spikeNodes.removeAll(keepingCapacity: true)
         checkpointNodes.removeAll(keepingCapacity: true)
         worldNode.removeAllChildren()
-        skyNode = nil
         coinsGot = []
+        lanternsGot = []
         cp = -1
         checkpointSnap = nil
 
@@ -407,7 +516,7 @@ final class MossgateScene: SKScene {
             node.position = CGPoint(x: (s.x + s.w/2) * viewScale,
                                     y: (s.y + s.h/2) * viewScale)
             node.colorBlendFactor = 0
-            worldNode.addChild(node)
+            addWorldChild(node)
             solidNodes.append(node)
         }
 
@@ -417,7 +526,7 @@ final class MossgateScene: SKScene {
                                     size: CGSize(width: m.w * viewScale, height: m.h * viewScale))
             node.position = CGPoint(x: (m.x + m.w/2) * viewScale,
                                     y: (m.y + m.h/2) * viewScale)
-            worldNode.addChild(node)
+            addWorldChild(node)
             moverNodes.append(node)
         }
 
@@ -427,7 +536,7 @@ final class MossgateScene: SKScene {
                                     size: CGSize(width: sp.w * viewScale, height: sp.h * viewScale))
             node.position = CGPoint(x: (sp.x + sp.w/2) * viewScale,
                                     y: (sp.y + sp.h/2) * viewScale)
-            worldNode.addChild(node)
+            addWorldChild(node)
             spikeNodes.append(node)
         }
 
@@ -436,7 +545,7 @@ final class MossgateScene: SKScene {
             let node = SKSpriteNode(texture: checkpointTexture, color: .white,
                                     size: CGSize(width: 48 * viewScale, height: 72 * viewScale))
             node.position = CGPoint(x: c.x * viewScale, y: (c.y - 36) * viewScale)
-            worldNode.addChild(node)
+            addWorldChild(node)
             checkpointNodes.append(node)
         }
 
@@ -444,7 +553,7 @@ final class MossgateScene: SKScene {
         flagNode = SKSpriteNode(texture: flagFrames.first, color: .white,
                                 size: CGSize(width: 42 * viewScale, height: 92 * viewScale))
         flagNode.position = CGPoint(x: level.flag.x * viewScale, y: level.flag.y * viewScale)
-        worldNode.addChild(flagNode)
+        addWorldChild(flagNode)
 
         // Coins
         coinNodes = []
@@ -453,15 +562,25 @@ final class MossgateScene: SKScene {
                                     size: CGSize(width: 26 * viewScale, height: 26 * viewScale))
             node.position = CGPoint(x: c.x * viewScale, y: c.y * viewScale)
             node.alpha = 1
-            worldNode.addChild(node)
+            addWorldChild(node)
             coinNodes.append(node)
+        }
+
+        // Lanterns — the pickups you collect to refill your light.
+        lanternNodes = []
+        for l in level.lanterns {
+            let node = SKSpriteNode(texture: lanternTexture, color: .white,
+                                    size: CGSize(width: 34 * viewScale, height: 34 * viewScale))
+            node.position = CGPoint(x: l.x * viewScale, y: l.y * viewScale)
+            addWorldChild(node)
+            lanternNodes.append(node)
         }
 
         // Player
         let pSize = CGSize(width: Phys.playerW * 1.6 * viewScale,
                            height: Phys.playerH * 1.6 * viewScale)
         playerNode = SKSpriteNode(texture: idleFrames.first, color: .white, size: pSize)
-        worldNode.addChild(playerNode)
+        addWorldChild(playerNode)
         placePlayer(at: level.spawn)
 
         camX = clamp(level.spawn.x - 180, 0, max(0, level.width - 720))
@@ -670,6 +789,18 @@ final class MossgateScene: SKScene {
             }
         }
 
+        // Lanterns — collecting one refills a unit of light (capped at max).
+        for (i, l) in level.lanterns.enumerated() where !lanternsGot.contains(i) {
+            if hypot(feetX - l.x, midY - l.y) < 46 {
+                lanternsGot.insert(i)
+                SettingsStore.shared.gainLife()
+                AudioEngine.shared.checkpoint()
+                burst(at: CGPoint(x: l.x, y: l.y), count: 14,
+                      color: UIColor(red: 1.0, green: 0.84, blue: 0.48, alpha: 1), speed: 95)
+                notifyPhase()
+            }
+        }
+
         // Checkpoints
         for (i, c) in level.checkpoints.enumerated() where i > cp {
             let r = CGRect(x: c.x - 24, y: c.y - 72, width: 48, height: 72)
@@ -770,6 +901,8 @@ final class MossgateScene: SKScene {
         AudioEngine.shared.die()
         burst(at: CGPoint(x: playerX + Phys.playerW/2, y: playerY + Phys.playerH/2),
               count: 18, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 140)
+        // Losing the wick costs a unit of light.
+        SettingsStore.shared.loseLife()
         setState(.dead)
         notifyPhase()
     }
@@ -779,6 +912,8 @@ final class MossgateScene: SKScene {
         burst(at: CGPoint(x: level.flag.x, y: level.flag.y - 40),
               count: 22, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 120)
         SettingsStore.shared.markCleared(level: levelIndex, coins: coinsGot.count)
+        // Clearing a gate rewards a unit of light (capped at max).
+        SettingsStore.shared.gainLife()
         let allCoins = coinsGot.count == level.coins.count
         let totalCoins = SettingsStore.shared.bestCoins.reduce(0, +)
         Achievements.levelCleared(level,
@@ -795,14 +930,13 @@ final class MossgateScene: SKScene {
             precondition(i < moverPositions.count, "placeMovers: i \(i) >= moverPositions.count \(moverPositions.count) at level \(level.name)")
             precondition(i < moverNodes.count, "placeMovers: i \(i) >= moverNodes.count \(moverNodes.count) at level \(level.name)")
             let s = sin((time / m.period) * 2 * .pi + m.phase)
-            if m.axis == "x" {
-                let px = m.x + s * m.distance + m.w/2
-                moverPositions[i] = CGPoint(x: px, y: m.y + m.h/2)
-            } else {
-                let py = m.y + s * m.distance + m.h/2
-                moverPositions[i] = CGPoint(x: m.x + m.w/2, y: py)
-            }
-            moverNodes[i].position = moverPositions[i]
+            // Store TOP-LEFT world coordinates, matching the engine's Rect
+            // convention (`px = x + sin(...) * distance`, `py = y`). The
+            // collision rect and the ride-snap use these directly; the sprite
+            // centre (+w/2, +h/2) is applied only when positioning the node.
+            let px = m.axis == "x" ? m.x + s * m.distance : m.x
+            let py = m.axis == "y" ? m.y + s * m.distance : m.y
+            moverPositions[i] = CGPoint(x: px, y: py)
         }
     }
 
@@ -881,7 +1015,7 @@ final class MossgateScene: SKScene {
             y: (playerY + Phys.playerH/2) * viewScale
         )
         playerNode.xScale = facing
-        playerNode.yScale = 1
+        playerNode.yScale = -1   // keep the counter-flip from addWorldChild
 
         // Coin spin & bob
         for (i, node) in coinNodes.enumerated() where !coinsGot.contains(i) {
@@ -914,11 +1048,12 @@ final class MossgateScene: SKScene {
             node.colorBlendFactor = lit ? 0 : 0.6
         }
 
-        // Movers
-        for (i, _) in level.movers.enumerated() {
+        // Movers — positions are TOP-LEFT; the sprite is centre-anchored.
+        for (i, m) in level.movers.enumerated() {
             if i < moverPositions.count, i < moverNodes.count {
                 let p = moverPositions[i]
-                moverNodes[i].position = CGPoint(x: p.x * viewScale, y: p.y * viewScale)
+                moverNodes[i].position = CGPoint(x: (p.x + m.w/2) * viewScale,
+                                                 y: (p.y + m.h/2) * viewScale)
             }
         }
     }
@@ -956,7 +1091,11 @@ final class MossgateScene: SKScene {
             coins: coinsGot.count,
             total: level.coins.count,
             cleared: SettingsStore.shared.cleared.indices.contains(levelIndex) ? SettingsStore.shared.cleared[levelIndex] : false,
-            jumps: jumps
+            jumps: jumps,
+            lanterns: lanternsGot.count,
+            lanternsTotal: level.lanterns.count,
+            lives: SettingsStore.shared.lives,
+            maxLives: SettingsStore.maxLives
         )
         onPhaseChange?(state, info)
         onCoinsChange?(coinsGot.count)

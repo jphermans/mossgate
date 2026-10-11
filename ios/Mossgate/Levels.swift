@@ -28,6 +28,8 @@ enum Levels {
                 Coin(x: 1360, y: 450), Coin(x: 1688, y: 400), Coin(x: 1968, y: 332),
                 Coin(x: 2400, y: 456), Coin(x: 2620, y: 440), Coin(x: 2840, y: 456),
             ],
+            lanterns: [Lantern(x: 1750, y: 400), Lantern(x: 2030, y: 340), Lantern(x: 2520, y: 460)],
+
             spikes: [
                 Spike(x: 1180, y: 478, w: 40, h: 34),
                 Spike(x: 1340, y: 478, w: 40, h: 34),
@@ -61,6 +63,8 @@ enum Levels {
                 Coin(x: 1660, y: 420), Coin(x: 1860, y: 250),
                 Coin(x: 2140, y: 246), Coin(x: 2360, y: 246),
             ],
+            lanterns: [Lantern(x: 720, y: 380), Lantern(x: 1480, y: 420)],
+
             spikes: [
                 Spike(x: 1080, y: 786, w: 40, h: 34), Spike(x: 1180, y: 786, w: 40, h: 34),
                 Spike(x: 1280, y: 786, w: 40, h: 34), Spike(x: 1380, y: 786, w: 40, h: 34),
@@ -99,6 +103,8 @@ enum Levels {
                 Coin(x: 2640, y: 490), Coin(x: 2888, y: 360), Coin(x: 3040, y: 180),
                 Coin(x: 3280, y: 176), Coin(x: 3480, y: 176),
             ],
+            lanterns: [Lantern(x: 540, y: 360), Lantern(x: 1080, y: 400), Lantern(x: 1880, y: 440)],
+
             spikes: [
                 Spike(x: 420, y: 734, w: 40, h: 34), Spike(x: 640, y: 734, w: 40, h: 34),
                 Spike(x: 1220, y: 926, w: 40, h: 34), Spike(x: 1320, y: 926, w: 40, h: 34),
@@ -136,6 +142,8 @@ enum Levels {
                 Coin(x: 1400, y: 528), Coin(x: 1660, y: 408), Coin(x: 1920, y: 308),
                 Coin(x: 2240, y: 528), Coin(x: 2440, y: 528), Coin(x: 2640, y: 528),
             ],
+            lanterns: [Lantern(x: 320, y: 360), Lantern(x: 1620, y: 480), Lantern(x: 2080, y: 420)],
+
             spikes: [
                 Spike(x: 600, y: 546, w: 40, h: 34), Spike(x: 1340, y: 546, w: 40, h: 34),
                 Spike(x: 1450, y: 546, w: 40, h: 34),
@@ -173,6 +181,8 @@ enum Levels {
                 Coin(x: 2220, y: 648), Coin(x: 2520, y: 488),
                 Coin(x: 2820, y: 328), Coin(x: 2980, y: 328), Coin(x: 3140, y: 328),
             ],
+            lanterns: [Lantern(x: 880, y: 360), Lantern(x: 1680, y: 400), Lantern(x: 2200, y: 380)],
+
             spikes: [
                 Spike(x: 410, y: 766, w: 40, h: 34), Spike(x: 510, y: 766, w: 40, h: 34),
                 Spike(x: 1100, y: 766, w: 40, h: 34), Spike(x: 1480, y: 766, w: 40, h: 34),
@@ -215,6 +225,8 @@ enum Levels {
                 Coin(x: 2320, y: 808), Coin(x: 2740, y: 648),
                 Coin(x: 3040, y: 488), Coin(x: 3200, y: 488), Coin(x: 3320, y: 488),
             ],
+            lanterns: [Lantern(x: 680, y: 400), Lantern(x: 1520, y: 420), Lantern(x: 2200, y: 380)],
+
             spikes: [
                 Spike(x: 320, y: 826, w: 40, h: 34), Spike(x: 420, y: 826, w: 40, h: 34),
                 Spike(x: 1140, y: 826, w: 40, h: 34), Spike(x: 2280, y: 826, w: 40, h: 34),
@@ -258,6 +270,8 @@ enum Levels {
                 Coin(x: 2480, y: 888), Coin(x: 2880, y: 748), Coin(x: 3160, y: 588),
                 Coin(x: 3440, y: 408), Coin(x: 3560, y: 408),
             ],
+            lanterns: [Lantern(x: 720, y: 380), Lantern(x: 1880, y: 400), Lantern(x: 2480, y: 360)],
+
             spikes: [
                 Spike(x: 380, y: 906, w: 40, h: 34),
                 Spike(x: 1180, y: 906, w: 40, h: 34), Spike(x: 1280, y: 906, w: 40, h: 34),

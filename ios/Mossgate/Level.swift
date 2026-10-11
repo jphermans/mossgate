@@ -26,6 +26,7 @@ enum GameState {
 }
 
 struct Coin { let x: CGFloat; let y: CGFloat }
+struct Lantern { let x: CGFloat; let y: CGFloat }   // pickup: a small lantern you can take to extend your light
 struct Spike { let x: CGFloat; let y: CGFloat; let w: CGFloat; let h: CGFloat }
 struct Checkpoint { let x: CGFloat; let y: CGFloat }
 struct Solid {
@@ -52,6 +53,7 @@ struct Level {
     let solids: [Solid]
     let movers: [MoverDef]
     let coins: [Coin]
+    let lanterns: [Lantern]   // bonus pickups: small lanterns that refill your light
     let spikes: [Spike]
     let checkpoints: [Checkpoint]
     let flag: CGPoint
