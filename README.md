@@ -3,7 +3,8 @@
 A 2D dusk-ruins platformer for iPhone. Native SwiftUI + SpriteKit + GameKit, built by
 [JPHsystems](https://github.com/jphermans).
 
-**0.5.0 (build 14)** · 7 gates · 2 worlds · iOS 18.0+ · portrait splash, landscape gameplay
+**0.6.0 (build 16)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · portrait splash,
+landscape gameplay
 
 Public support, privacy and changelog page: <https://jphermans.github.io/mossgate-support/>
 
@@ -15,8 +16,11 @@ You carry a lantern along a ruined causeway toward a gate. Falling, or touching 
 costs a unit of light. Three units a run; collect a lantern to win one back. Lose all three
 and the run is over.
 
-- **Two worlds** — Mossgate Dusk (cool greens) and Ember Caves (warm rock). Each gate
-  introduces one idea: moving platforms, one-way ledges, double jumps.
+- **Six worlds, 36 gates.** Mossgate Dusk is free; the other five are the single
+  in-app purchase, and each world only opens once the one before it is finished.
+- **6 gates per world, and most of them are rebuilt every run.** Each world opens
+  with its authored gates — they are the ones that teach — and the rest are
+  generated, so the back half of the game is new each time you play.
 - **Every gate is left-to-right**, so the controls stay two thumbs: move, jump, down.
 - **Coins are the score.** Twelve or so per gate; your best count per gate is kept.
 
@@ -72,7 +76,24 @@ milestones. `ios/project.yml` holds both; never edit them by hand.
 ./scripts/bump-ios-version.py --set 1.0 --no-xcodegen
 ```
 
-## Three systems worth knowing about
+## Four systems worth knowing about
+
+### 0. The gates are generated, and the paywall is real
+
+`ios/Mossgate/LevelGen.swift` builds a gate by grammar: walk right, and at each
+step pick a feature (flat run, gap, step up, step down, bramble run, one-way
+bridge, mover crossing) inside a limit the physics can actually clear — a gap no
+wider than a running jump, a step no higher than one. That is a **static**
+guarantee rather than a "can the bot finish it" check, on purpose: gating
+generation on the bot would delete every feature it cannot handle and collapse the
+output to flat ground. `LevelGen.inspect` measures what a gate actually asks for;
+`-TestLevelGen 1` prints the table.
+
+Two rules decide whether a world can be played, in this order: is it the free one,
+then is the full game owned **and** every world before it finished. They live in
+`SettingsStore.worldUnlocked` so the paywall has one definition. `Store.swift`
+writes `hasFullGame` from StoreKit's own entitlement records — not from what the
+purchase call returned, because entitlements are what survive a reinstall.
 
 ### 1. The worlds reshuffle every run
 
