@@ -35,6 +35,10 @@ final class MossgateScene: SKScene {
     private var moverPositions: [CGPoint] = []
     private var moverPrev: [CGPoint] = []
     private var time: CGFloat = 0
+    /// Fixed physics timestep and its accumulator — matches engine.ts
+    /// (STEP_DT = 1/120, guard at 8 substeps per frame).
+    static let stepDt: CGFloat = 1.0 / 120.0
+    private var acc: CGFloat = 0
 
     // Progress
     private var coinsGot: Set<Int> = []
@@ -505,7 +509,11 @@ final class MossgateScene: SKScene {
         // on the tiles is -100, but order of addChild also matters).
         addSky()
         time = 0
+        acc = 0
+        // Match engine.ts loadLevel: seed positions, evaluate the mover curve at
+        // t = 0, then zero the delta so the first substep doesn't jerk the rider.
         moverPositions = level.movers.map { CGPoint(x: $0.x, y: $0.y) }
+        placeMovers()
         moverPrev = moverPositions
 
         // Solids
@@ -595,6 +603,8 @@ final class MossgateScene: SKScene {
         viewScale=\(viewScale) camY=\(camY) size=\(size)
         worldNode.parent=\(String(describing: worldNode.parent))
         worldNode.position=\(worldNode.position)
+        moverPos=\(moverPositions.map { "(\(Int($0.x)),\(Int($0.y)))" }.joined(separator: " "))
+        moverNodePos=\(moverNodes.map { "(\(Int($0.position.x)),\(Int($0.position.y)))" }.joined(separator: " "))
         """
         let path = NSTemporaryDirectory() + "mossgate-debug.log"
         if let data = (loadInfo + "\n").data(using: .utf8) {
@@ -606,7 +616,7 @@ final class MossgateScene: SKScene {
                 try? data.write(to: URL(fileURLWithPath: path))
             }
         }
-        print("[Mossgate] loadLevel: solids=\(solidNodes.count) movers=\(moverNodes.count) spikes=\(spikeNodes.count) coins=\(coinNodes.count) checkpoints=\(checkpointNodes.count) flag=\(flagNode != nil) player=\(playerNode != nil) viewScale=\(viewScale) camY=\(camY)")
+        print("[Mossgate] loadLevel: solids=\(solidNodes.count) movers=\(moverNodes.count) spikes=\(spikeNodes.count) coins=\(coinNodes.count) checkpoints=\(checkpointNodes.count) flag=\(flagNode != nil) player=\(playerNode != nil) viewScale=\(viewScale) camY=\(camY) moverWorld=\(moverPositions.map { "(\(Int($0.x)),\(Int($0.y)))" }.joined(separator: " ")) moverNode=\(moverNodes.map { "(\(Int($0.position.x)),\(Int($0.position.y)))" }.joined(separator: " "))")
         setState(toState)
         notifyPhase()
     }
@@ -639,11 +649,23 @@ final class MossgateScene: SKScene {
 
         switch state {
         case .play:
-            for _ in 0..<3 { step(dt / 3) }   // fixed-substep like the engine
+            // Fixed-substep accumulator, matching engine.ts:
+            //   acc += dt; while (acc >= STEP_DT && guard++ < 8) { step(STEP_DT); acc -= STEP_DT }
+            // placeMovers() lives INSIDE step(), so mover deltas are per-substep —
+            // calling it once per frame here made the ride delta apply 3x and slid
+            // the player off every platform they stood on.
+            acc += dt
+            var guardCount = 0
+            while acc >= Self.stepDt && guardCount < 8 {
+                step(Self.stepDt)
+                acc -= Self.stepDt
+                guardCount += 1
+                if state != .play { break }
+            }
         default:
             time += dt
+            placeMovers()
         }
-        placeMovers()
         positionWorld()
         render()
     }
@@ -652,6 +674,11 @@ final class MossgateScene: SKScene {
 
     private func step(_ dt: CGFloat) {
         time += dt
+        // placeMovers belongs here (engine.ts step() line 1). Mover positions —
+        // and therefore `moverPrev` — must advance once per substep, otherwise
+        // the ride delta (px - prevX) is applied several times per frame and the
+        // player slides off any platform they are standing on.
+        placeMovers()
         grace = max(0, grace - dt)
         dropTimer = max(0, dropTimer - dt)
         buffer = max(0, buffer - dt)
@@ -924,11 +951,17 @@ final class MossgateScene: SKScene {
         notifyPhase()
     }
 
+    /// Advances every mover along its curve for the current `time`.
+    ///
+    /// Pure position maths — deliberately touches no nodes, because it is also
+    /// called from `loadLevel` *before* the mover sprites are built, and from
+    /// `step()` once per substep. The rider delta (`pos - prev`) therefore has
+    /// exactly one frame's worth of motion per frame, no matter how many
+    /// substeps run.
     private func placeMovers() {
-        moverPrev = moverPositions
+        guard moverPositions.count == level.movers.count else { return }
+        moverPrev = moverPositions   // snapshot before advancing
         for (i, m) in level.movers.enumerated() {
-            precondition(i < moverPositions.count, "placeMovers: i \(i) >= moverPositions.count \(moverPositions.count) at level \(level.name)")
-            precondition(i < moverNodes.count, "placeMovers: i \(i) >= moverNodes.count \(moverNodes.count) at level \(level.name)")
             let s = sin((time / m.period) * 2 * .pi + m.phase)
             // Store TOP-LEFT world coordinates, matching the engine's Rect
             // convention (`px = x + sin(...) * distance`, `py = y`). The
