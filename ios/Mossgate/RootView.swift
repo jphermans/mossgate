@@ -59,9 +59,14 @@ struct RootView: View {
                     withAnimation(.easeInOut(duration: 0.35)) { phase = .title }
                 }
             }
-            // Test hook: -AutoStartLevel N launches straight into level N.
-            if let idx = ProcessInfo.processInfo.environment["AUTO_START_LEVEL"]
-                .flatMap({ Int($0) }), idx < Levels.all.count {
+            // Test hooks:
+            //  -SkipSplash 1       → skip past the splash screen
+            //  -AutoStartLevel N   → launch directly into level N (skips title screen too)
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-AutoStartLevel"),
+               i + 1 < args.count,
+               let idx = Int(args[i + 1]),
+               idx < Levels.all.count {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     gameLevelIndex = idx
                     phase = .game
