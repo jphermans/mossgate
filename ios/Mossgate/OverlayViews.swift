@@ -99,7 +99,7 @@ struct GameControlsView: View {
                             isPrimary: Bool = false,
                             onChange: @escaping (Bool) -> Void) -> some View {
         ControlButton(label: label, isPrimary: isPrimary, onPress: {
-            onChange(true); AudioEngine.shared.unlock()
+            onChange(true)
         }, onRelease: { onChange(false) })
     }
 }

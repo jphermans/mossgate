@@ -14,6 +14,14 @@ final class AudioEngine {
     private var ambientPlayer: AVAudioPlayer?
     private let settings: SettingsStore
 
+    /// Dedicated serial queue for all AVAudioEngine operations. SpriteKit calls
+    /// our scene's `step(_:)` on the main thread; calling `scheduleBuffer` on
+    /// the main thread can throw an NSException inside AVFAudio. Routing
+    /// everything through this queue keeps the audio engine happy.
+    private let audioQueue = DispatchQueue(label: "io.jphsystems.mossgate.audio", qos: .userInitiated)
+    private var isEngineStarted = false
+    private let startLock = NSLock()
+
     init(settings: SettingsStore = .shared) {
         self.settings = settings
         self.sfxMixer = AVAudioMixerNode()
@@ -52,12 +60,43 @@ final class AudioEngine {
     }
 
     /// Resume the engine after the first user interaction (required by iOS).
-    func unlock() {
-        guard !engine.isRunning else { return }
-        do {
-            try engine.start()
-        } catch {
-            print("[Mossgate:Audio] engine.start: \(error)")
+    /// Called lazily on the first SFX — the engine is then started on the audio
+    /// queue, never on the main thread.
+    private func ensureEngineStarted() {
+        startLock.lock()
+        let alreadyRunning = isEngineStarted
+        startLock.unlock()
+        if alreadyRunning { return }
+
+        audioQueue.async { [weak self] in
+            guard let self = self else { return }
+            guard !self.engine.isRunning else { return }
+            do {
+                try self.engine.start()
+                self.startLock.lock()
+                self.isEngineStarted = true
+                self.startLock.unlock()
+            } catch {
+                print("[Mossgate:Audio] engine.start: \(error)")
+            }
+        }
+    }
+
+    /// Schedule a buffer on the SFX node, off the main thread. Crashes inside
+    /// AVFAudio's `scheduleBuffer` cannot be caught by Swift `try` — they are
+    /// NSExceptions thrown on the main thread when the engine isn't ready or
+    /// the node is being torn down. Routing through a serial queue avoids that.
+    private func scheduleSFX(_ buffer: AVAudioPCMBuffer) {
+        ensureEngineStarted()
+        audioQueue.async { [weak self] in
+            guard let self = self else { return }
+            // Wait briefly for the engine to actually start before scheduling.
+            // 50ms is enough on the simulator; the first frame won't fire SFX
+            // until the user touches a control anyway.
+            if !self.engine.isRunning {
+                Thread.sleep(forTimeInterval: 0.05)
+            }
+            self.sfxNode.scheduleBuffer(buffer, completionHandler: nil)
         }
     }
 
@@ -130,8 +169,8 @@ final class AudioEngine {
             let env = Float(vol) * (1.0 - progress)
             data[startSample + i] = raw * env
         }
-        // Schedule on the SFX mixer.
-        sfxNode.scheduleBuffer(buffer, completionHandler: nil)
+        // Schedule on the SFX mixer (off the main thread, see scheduleSFX).
+        scheduleSFX(buffer)
     }
 
     private func noise(dur: Double, vol: Double, cutoff: Double) {
@@ -147,6 +186,6 @@ final class AudioEngine {
             let env = Float(vol) * Float(1.0 - Double(i) / Double(n))
             data[i] = Float.random(in: -1...1) * env
         }
-        sfxNode.scheduleBuffer(buffer, completionHandler: nil)
+        scheduleSFX(buffer)
     }
 }

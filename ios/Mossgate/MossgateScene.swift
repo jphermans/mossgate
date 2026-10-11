@@ -135,8 +135,11 @@ final class MossgateScene: SKScene {
         backgroundColor = UIColor(named: "MossgateDusk") ?? UIColor(red: 12/255, green: 28/255, blue: 31/255, alpha: 1)
         view.ignoresSiblingOrder = true
         scaleMode = .resizeFill
-        // Top-left origin so scene (0, 0) is the top-left corner of the buffer.
-        anchorPoint = CGPoint(x: 0, y: 0)
+        // Top-left origin so scene (0, 0) is the top-left corner of the buffer
+        // (matches canvas convention used in the original HTML/JS engine).
+        // Default `anchorPoint = (0, 0)` would put origin at the BOTTOM-LEFT,
+        // flipping the y axis and putting everything above y=360 off-screen.
+        anchorPoint = CGPoint(x: 0, y: 1)
         // No SKCameraNode — the worldNode translation IS the camera.
         camera = nil
         // addChild is idempotent — re-attach safely if SwiftUI re-presents this scene.
@@ -200,7 +203,6 @@ final class MossgateScene: SKScene {
     // ── Level setup ───────────────────────────────────────────────
 
     func startLevel(_ index: Int) {
-        AudioEngine.shared.unlock()
         loadLevel(index: index, toState: .play)
     }
 

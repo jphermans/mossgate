@@ -22,14 +22,12 @@ struct RootView: View {
             switch phase {
             case .splash:
                 SplashView {
-                    AudioEngine.shared.unlock()
                     withAnimation(.easeInOut(duration: 0.35)) { phase = .title }
                 }
                 .transition(.opacity)
             case .title:
                 TitleView(
                     onStartLevel: { idx in
-                        AudioEngine.shared.unlock()
                         gameLevelIndex = idx
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
                     },
