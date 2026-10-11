@@ -296,7 +296,8 @@ final class MossgateScene: SKScene {
             let start = Date()
             let run = Autopilot.run(level: lv, phase: t.phase, period: t.period)
             let ms = Int(Date().timeIntervalSince(start) * 1000)
-            let coins = Autopilot.coins(run.path, count: lv.coins.count, seed: seed &+ lv.id)
+            let coins = Autopilot.coins(run.path, count: lv.coins.count, seed: seed &+ lv.id,
+                                        level: lv)
             if run.reachedGate { solved += 1 }
             let verdict = run.reachedGate ? "reached gate" : "FAILED      "
             // How far the ballistic probe moves each coin, and how many coins it
@@ -304,22 +305,30 @@ final class MossgateScene: SKScene {
             // difference the player actually sees.
             var moved: [CGFloat] = []
             var unplaced = 0
+            var heights: [CGFloat] = []
             for (i, c) in lv.coins.enumerated() {
                 if let p = Autopilot.variedCoin(near: CGPoint(x: c.x, y: c.y), level: lv,
                                                 phase: t.phase, period: t.period,
                                                 seed: seed &+ i &* 977) {
                     moved.append(hypot(p.x - c.x, p.y - c.y))
+                    if let h = Autopilot.heightAboveGround(of: p, in: lv) { heights.append(h) }
                 } else {
                     unplaced += 1
                 }
             }
             let avg = moved.isEmpty ? 0 : moved.reduce(0, +) / CGFloat(moved.count)
             let maxMove = moved.max() ?? 0
+            let maxHigh = heights.max() ?? 0
+            let overReach = heights.filter { $0 > 132 }.count
             print("[Mossgate:BOT] level \(lv.id) \"\(lv.name)\" \(verdict) "
                   + "route=\(run.path.count) coins=\(coins.count)/\(lv.coins.count) "
                   + "\(ms)ms t=\(String(format: "%.1f", run.seconds))s | \(run.reason)")
+            // Route coins get the same reach test as probed ones.
+            let highestRoute = coins.map { Autopilot.heightAboveGround(of: $0, in: lv) ?? 0 }.max() ?? 0
             print("[Mossgate:BOT]    probe: moved avg=\(Int(avg)) max=\(Int(maxMove)) units, "
-                  + "unplaceable=\(unplaced)/\(lv.coins.count)")
+                  + "unplaceable=\(unplaced)/\(lv.coins.count), "
+                  + "highest=\(Int(maxHigh)) above ground, out-of-reach=\(overReach)"
+                  + (coins.isEmpty ? "" : ", route-coins highest=\(Int(highestRoute))"))
         }
         print("[Mossgate:BOT] TOTAL solved=\(solved)/\(Levels.all.count) seed=\(seed)")
     }
@@ -643,7 +652,8 @@ final class MossgateScene: SKScene {
         coinSource = "authored"
         if !route.isEmpty {
             let placed = Autopilot.coins(route, count: level.coins.count,
-                                         seed: SettingsStore.shared.runSeed &+ level.id)
+                                         seed: SettingsStore.shared.runSeed &+ level.id,
+                                         level: level)
             if placed.count == level.coins.count {
                 out = placed
                 coinSource = "runner"

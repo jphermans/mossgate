@@ -313,16 +313,23 @@ enum Autopilot {
     /// Anywhere the player went is somewhere a player can be, so a coin there can
     /// be collected. The proof is the run, not an argument about it.
     static func reachable(from anchor: CGPoint, level: Level,
-                          phase: [CGFloat], period: [CGFloat]) -> [CGPoint] {
+                          phase: [CGFloat], period: [CGFloat],
+                          singleJumpOnly: Bool = false) -> [CGPoint] {
         guard let ground = surfaceBelow(anchor, level: level) else { return [] }
         let dt: CGFloat = 1.0 / 120.0
         var out: [CGPoint] = []
 
         // (run-up distance, delay before the second jump; nil = single jump)
-        let launches: [(CGFloat, CGFloat?)] = [
+        var launches: [(CGFloat, CGFloat?)] = [
             (0, nil), (70, nil), (150, nil),
             (70, 0.20), (70, 0.36), (150, 0.30),
         ]
+        // Coins must be collectible by a player who just runs and jumps, so they
+        // are confined to what ONE jump reaches. A double-jump apex is a place the
+        // player only gets to by matching an exact input sequence.
+        if singleJumpOnly {
+            launches = launches.filter { $0.1 == nil }
+        }
 
         for (runUp, second) in launches {
             var sim = Sim(level: level, phase: phase, period: period)
@@ -347,6 +354,14 @@ enum Autopilot {
         return out
     }
 
+    /// How high a point sits above the surface it would be reached from. This is
+    /// the number that decides whether a player who just runs and jumps will
+    /// collect a coin, so it is measured rather than assumed.
+    static func heightAboveGround(of p: CGPoint, in level: Level) -> CGFloat? {
+        guard let g = surfaceBelow(p, level: level) else { return nil }
+        return g.y - p.y
+    }
+
     /// The first surface under a point, as the world coordinates of its top edge.
     private static func surfaceBelow(_ p: CGPoint, level: Level) -> CGPoint? {
         var best: CGFloat?
@@ -364,14 +379,23 @@ enum Autopilot {
     /// case the caller keeps its own fallback.
     static func variedCoin(near anchor: CGPoint, level: Level, phase: [CGFloat],
                            period: [CGFloat], seed: Int) -> CGPoint? {
-        let arc = reachable(from: anchor, level: level, phase: phase, period: period)
+        guard let ground = surfaceBelow(anchor, level: level) else { return nil }
+        let arc = reachable(from: anchor, level: level, phase: phase, period: period,
+                            singleJumpOnly: true)
         guard arc.count > 16 else { return nil }
 
-        // Stay near the anchor — far along the arc is a different part of the level.
-        var pool = arc.filter { hypot($0.x - anchor.x, $0.y - anchor.y) < 200 }
-        // Prefer the airborne frames; the opening ones are just the run-up.
-        let airborne = pool.filter { abs($0.y - anchor.y) > 18 }
-        if airborne.count > 12 { pool = airborne }
+        // A single jump clears about 120 units, so the coin is kept in a band
+        // between 30 and 128 above the local surface. Above that it is only
+        // reachable by a maximal jump, which is exactly why coins were being
+        // missed: the player runs and jumps, and the coin hangs above the arc.
+        let bandTop = ground.y - 128
+        let bandBottom = ground.y - 30
+        let pool = arc.filter {
+            $0.y > bandTop && $0.y < bandBottom &&
+            abs($0.x - anchor.x) < 150
+        }
+        // Nothing in the band means the ground under the anchor is not the way in;
+        // leave the coin where the level author put it rather than guessing.
         guard pool.count > 8 else { return nil }
 
         var state = UInt64(bitPattern: Int64(seed)) | 1
@@ -507,12 +531,41 @@ enum Autopilot {
 
     // MARK: - Coins from the route
 
+    /// A single jump clears about 120 units, so a coin higher than this above the
+    /// ground under it is one a player running and jumping will miss.
+    static let grabReach: CGFloat = 120
+
+    /// The nearest point on a route that is within `grabReach` of the ground.
+    ///
+    /// Route samples land wherever the runner happened to be, which includes the
+    /// apex of every jump. A coin there is on the runner's exact arc but not on a
+    /// player's, which is why coins were being left behind. Anything above the
+    /// reach is walked back to the nearest point that is low enough, preferring
+    /// forward so the coin stays ahead of the run.
+    private static func snapToReach(_ route: [CGPoint], index: Int, level: Level) -> CGPoint {
+        if index < 0 || index >= route.count { return route[min(max(index, 0), route.count - 1)] }
+        if let h = heightAboveGround(of: route[index], in: level), h <= grabReach {
+            return route[index]
+        }
+        for d in 1..<route.count {
+            let f = index + d
+            if f < route.count, let h = heightAboveGround(of: route[f], in: level), h <= grabReach {
+                return route[f]
+            }
+            let b = index - d
+            if b >= 0, let h = heightAboveGround(of: route[b], in: level), h <= grabReach {
+                return route[b]
+            }
+        }
+        return route[index]
+    }
+
     /// Picks `count` coin positions along a route.
     ///
     /// Spaced by ARC LENGTH, not by index: the route is recorded once per 1/120 s
     /// substep, so it is dense wherever the runner moved slowly. Indexing would
     /// bunch the coins at the top of every jump — exactly where it hangs longest.
-    static func coins(_ route: [CGPoint], count: Int, seed: Int) -> [CGPoint] {
+    static func coins(_ route: [CGPoint], count: Int, seed: Int, level: Level) -> [CGPoint] {
         guard route.count > 4, count > 0 else { return [] }
 
         var lengths: [CGFloat] = [0]
@@ -544,7 +597,7 @@ enum Autopilot {
             // still do not produce the same tidy row.
             let target = cursor + unit() * step * 0.5
             while i < route.count && lengths[i] < target { i += 1 }
-            out.append(route[min(i, route.count - 1)])
+            out.append(snapToReach(route, index: min(i, route.count - 1), level: level))
             cursor += step
         }
         return out
