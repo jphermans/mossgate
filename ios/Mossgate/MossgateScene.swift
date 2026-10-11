@@ -556,6 +556,10 @@ final class MossgateScene: SKScene {
     private func loadLevel(index: Int, toState: GameState) {
         levelIndex = index
         level = Levels.all[index]
+        // Each world gets its own looping track.
+        if toState == .play {
+            AudioEngine.shared.playMusic(level.world == 1 ? .ember : .dusk)
+        }
         // Clear arrays BEFORE clearing worldNode, otherwise old node refs leak
         // across multiple loadLevel calls (didMove + startLevel).
         solidNodes.removeAll(keepingCapacity: true)

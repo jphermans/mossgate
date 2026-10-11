@@ -38,6 +38,7 @@ struct RootView: View {
                     }
                 )
                 .transition(.opacity)
+                .onAppear { AudioEngine.shared.playMusic(.dusk) }
 
             case .game:
                 gameStack

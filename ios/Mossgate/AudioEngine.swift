@@ -1,18 +1,32 @@
 import AVFoundation
 import Foundation
 
-/// Procedural audio. Mirrors the canvas game's `Sfx` class but uses
-/// AVAudioEngine so it respects the system audio session and the player's
-/// SFX / sound toggles in SettingsStore.
+/// Audio. Sound effects are synthesised in code; the two background music
+/// tracks are bundled AAC files (see scripts/make-music.py) played on a looping
+/// player node. Everything routes through AVAudioEngine so it respects the
+/// system audio session and the player's sound / SFX toggles in SettingsStore.
 final class AudioEngine {
     static let shared = AudioEngine()
 
+    /// The two looping background tracks. Raw values are the bundled file names.
+    enum MusicTrack: String, CaseIterable {
+        case dusk   // Mossgate Dusk — title screen and world 0
+        case ember  // Ember Caves — world 1
+    }
+
     private let engine = AVAudioEngine()
     private let sfxNode = AVAudioPlayerNode()
+    private let ambientNode = AVAudioPlayerNode()
     private let sfxMixer: AVAudioMixerNode
     private let ambientMixer: AVAudioMixerNode
-    private var ambientPlayer: AVAudioPlayer?
     private let settings: SettingsStore
+
+    /// Decoded music, kept so switching back to a track costs nothing.
+    private var musicBuffers: [MusicTrack: AVAudioPCMBuffer] = [:]
+    private var currentMusic: MusicTrack?
+    /// The last track asked for, even while muted — so re-enabling sound can
+    /// start it again without waiting for the next level change.
+    private var musicWanted: MusicTrack?
 
     /// Dedicated serial queue for all AVAudioEngine operations. SpriteKit calls
     /// our scene's `step(_:)` on the main thread; calling `scheduleBuffer` on
@@ -28,6 +42,7 @@ final class AudioEngine {
         self.ambientMixer = AVAudioMixerNode()
         engine.attach(sfxNode)
         engine.attach(sfxMixer)
+        engine.attach(ambientNode)
         engine.attach(ambientMixer)
         // Connect the sfxNode with an explicit mono 44.1 kHz format. Without
         // this, the node defaults to the engine's mainMixer output (stereo),
@@ -35,9 +50,12 @@ final class AudioEngine {
         // "_outputFormat.channelCount == buffer.format.channelCount" because
         // the SFX buffers are mono (see `tone()`).
         let sfxFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+        // The music path is stereo, matching the bundled AAC files.
+        let musicFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
         engine.connect(sfxNode, to: sfxMixer, format: sfxFormat)
         engine.connect(sfxMixer, to: engine.mainMixerNode, format: sfxFormat)
-        engine.connect(ambientMixer, to: engine.mainMixerNode, format: sfxFormat)
+        engine.connect(ambientNode, to: ambientMixer, format: musicFormat)
+        engine.connect(ambientMixer, to: engine.mainMixerNode, format: musicFormat)
 
         configureSession()
         applyVolumes()
@@ -63,6 +81,96 @@ final class AudioEngine {
     @objc private func applyVolumes() {
         ambientMixer.outputVolume = settings.soundOn ? Float(settings.soundVolume) : 0
         sfxMixer.outputVolume = settings.sfxOn ? Float(settings.sfxVolume) : 0
+        // Turning sound back on should bring the music back immediately rather
+        // than waiting for the next level change.
+        if settings.soundOn, let wanted = musicWanted,
+           currentMusic != wanted || !ambientNode.isPlaying {
+            playMusic(wanted)
+        }
+    }
+
+    // ──────────── Background music ────────────
+
+    /// Start, or switch to, a looping background track. Safe to call from
+    /// anywhere and as often as you like — re-requesting the track that is
+    /// already playing is a no-op.
+    func playMusic(_ track: MusicTrack) {
+        musicWanted = track
+        guard settings.soundOn else { return }          // started later if re-enabled
+        guard currentMusic != track || !ambientNode.isPlaying else { return }
+        currentMusic = track
+
+        ensureEngineStarted()
+        audioQueue.async { [weak self] in
+            guard let self = self else { return }
+            if !self.engine.isRunning { Thread.sleep(forTimeInterval: 0.08) }
+            guard self.engine.isRunning else {
+                print("[Mossgate:Audio] music \(track.rawValue): engine not running")
+                return
+            }
+
+            let buffer: AVAudioPCMBuffer
+            if let cached = self.musicBuffers[track] {
+                buffer = cached
+            } else {
+                guard let loaded = Self.loadMusicBuffer(track) else {
+                    print("[Mossgate:Audio] music \(track.rawValue): could not load from bundle")
+                    return
+                }
+                self.musicBuffers[track] = loaded
+                buffer = loaded
+            }
+
+            // The ambient path is connected as stereo 44.1 kHz; scheduling a
+            // buffer in any other format aborts inside AVFAudio.
+            guard buffer.format.channelCount == 2,
+                  buffer.format.sampleRate == 44_100 else {
+                print("[Mossgate:Audio] music \(track.rawValue): unexpected format "
+                      + "\(buffer.format.channelCount)ch @ \(buffer.format.sampleRate)Hz")
+                return
+            }
+
+            self.ambientNode.stop()
+            self.ambientNode.scheduleBuffer(buffer, at: nil, options: .loops,
+                                            completionHandler: nil)
+            self.ambientNode.play()
+            if ProcessInfo.processInfo.arguments.contains("-TestSfx") {
+                let secs = Double(buffer.frameLength) / buffer.format.sampleRate
+                print("[Mossgate:AUDIO] music \(track.rawValue) frames=\(buffer.frameLength) "
+                      + "(\(String(format: "%.1f", secs))s) ch=\(buffer.format.channelCount) "
+                      + "running=\(self.engine.isRunning) vol=\(self.ambientMixer.outputVolume)")
+            }
+        }
+    }
+
+    /// Fade out and drop the current track (used when leaving for the splash).
+    func stopMusic() {
+        musicWanted = nil
+        currentMusic = nil
+        audioQueue.async { [weak self] in
+            self?.ambientNode.stop()
+        }
+    }
+
+    /// Decodes a bundled track into a PCM buffer for looping. Prefers the
+    /// AAC file; falls back to WAV if a raw render is present.
+    private static func loadMusicBuffer(_ track: MusicTrack) -> AVAudioPCMBuffer? {
+        let url = Bundle.main.url(forResource: track.rawValue, withExtension: "m4a")
+               ?? Bundle.main.url(forResource: track.rawValue, withExtension: "wav")
+        guard let url else { return nil }
+        guard let file = try? AVAudioFile(forReading: url) else { return nil }
+
+        let frames = AVAudioFrameCount(file.length)
+        guard frames > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat,
+                                            frameCapacity: frames) else { return nil }
+        do {
+            try file.read(into: buffer)
+        } catch {
+            print("[Mossgate:Audio] music read \(track.rawValue): \(error)")
+            return nil
+        }
+        return buffer
     }
 
     /// Resume the engine after the first user interaction (required by iOS).
