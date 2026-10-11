@@ -18,6 +18,7 @@
 		30DCB53952D33AB7473FDA86 /* AudioEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9AED1889F92171EC5C7C17D /* AudioEngine.swift */; };
 		350C112DD1ACD84AC6083E97 /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8564AE6836A6BFFCE26ED845 /* SplashView.swift */; };
 		38D05A2C4058E433A6D37733 /* MossgateGameView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89D27F4086E0CD4991CB2888 /* MossgateGameView.swift */; };
+		462B03145A9A3781769C851D /* GameConfirm.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6C6311640D5954178254A31 /* GameConfirm.swift */; };
 		497A3CDADE65F4EEECB377AA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1BF2363ED17F03C16D187541 /* Assets.xcassets */; };
 		49F02708427DF2ADBBB52EC8 /* flag-4.png in Resources */ = {isa = PBXBuildFile; fileRef = A761DAA2F1480F0AD528EA34 /* flag-4.png */; };
 		4BED6D9E9A1AD506810D84C4 /* coin-4.png in Resources */ = {isa = PBXBuildFile; fileRef = 6EDE7A31A695C6FB397CFA36 /* coin-4.png */; };
@@ -108,6 +109,7 @@
 		E0A84C936FBC190E4D31118F /* idle-3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "idle-3.png"; sourceTree = "<group>"; };
 		EA1E887D155C57C5171E683F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F2D1680C647C7829E0700209 /* OverlayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayViews.swift; sourceTree = "<group>"; };
+		F6C6311640D5954178254A31 /* GameConfirm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameConfirm.swift; sourceTree = "<group>"; };
 		FE15C6D83CACF57CBC84E245 /* TitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -131,6 +133,7 @@
 				0DD7B26F6CE445E7B06F9E22 /* Autopilot.swift */,
 				CDD4419F7B9485FD2A7A297A /* GameArt.swift */,
 				31AEE4DA1BAA6886EF0CA064 /* GameCenterManager.swift */,
+				F6C6311640D5954178254A31 /* GameConfirm.swift */,
 				70BD29C7FBBFCB3E8F0E4C6C /* GamepadManager.swift */,
 				9F7BCBEF4E3D0F6F044C175D /* Level.swift */,
 				3406F9383B035A5B45B862D3 /* LevelGen.swift */,
@@ -312,6 +315,7 @@
 				85F860C1AFE02094E5446E2B /* Autopilot.swift in Sources */,
 				DC7BE800063B0998F4C9D587 /* GameArt.swift in Sources */,
 				FB1D433C6D72EAB12141DAB3 /* GameCenterManager.swift in Sources */,
+				462B03145A9A3781769C851D /* GameConfirm.swift in Sources */,
 				28EA0CF96DF3C2E370389371 /* GamepadManager.swift in Sources */,
 				FC889CC01379AB9F4BEFD5A7 /* Level.swift in Sources */,
 				B151A737584D6DF174E96616 /* LevelGen.swift in Sources */,
@@ -368,7 +372,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -403,7 +407,7 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.6.6;
+				MARKETING_VERSION = 0.7.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -485,7 +489,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 22;
+				CURRENT_PROJECT_VERSION = 23;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -514,7 +518,7 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.6.6;
+				MARKETING_VERSION = 0.7.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = Mossgate;

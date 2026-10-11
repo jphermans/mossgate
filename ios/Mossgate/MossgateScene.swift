@@ -281,6 +281,31 @@ final class MossgateScene: SKScene {
         runAutopilotTestIfRequested()
         runLevelGenTestIfRequested()
         runCoinTestIfRequested()
+        runSettingsTestIfRequested()
+    }
+
+    /// Test hook: `-TestSettings 1` reports the persisted preferences, and
+    /// `-TestSettings set` changes them and resets progress first — so "resetting
+    /// progress keeps your settings" is checked rather than assumed. Run it once with
+    /// `set`, then again plainly: the second run reads them back off disk, which is
+    /// the part that proves they survive a restart.
+    private func runSettingsTestIfRequested() {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-TestSettings") else { return }
+        let mode = (i + 1 < args.count) ? args[i + 1] : ""
+        let s = SettingsStore.shared
+        if mode == "set" {
+            s.soundOn = false
+            s.sfxVolume = 0.33
+            s.controllerOn = false
+            s.soundVolume = 0.21
+            s.resetProgress()
+        }
+        print("[Mossgate:SETTINGS] mode=\(mode.isEmpty ? "read" : mode) "
+              + "soundOn=\(s.soundOn) soundVolume=\(String(format: "%.2f", s.soundVolume)) "
+              + "sfxOn=\(s.sfxOn) sfxVolume=\(String(format: "%.2f", s.sfxVolume)) "
+              + "controllerOn=\(s.controllerOn) lives=\(s.lives) "
+              + "gatesCleared=\(s.cleared.filter { $0 }.count)")
     }
 
     /// Test hook: `-TestCoins 1` checks every PLACED coin against the game's own

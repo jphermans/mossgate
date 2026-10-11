@@ -5,7 +5,10 @@ struct SetupView: View {
     let onDone: () -> Void
     @ObservedObject private var settings = SettingsStore.shared
     @ObservedObject private var controllers = ControllerList.shared
-    @State private var showResetConfirm = false
+    /// `-OpenResetConfirm 1` opens straight into the reset card, so it can be
+    /// photographed without a tap.
+    @State private var showResetConfirm =
+        ProcessInfo.processInfo.arguments.contains("-OpenResetConfirm")
 
     var body: some View {
         ZStack {
@@ -67,16 +70,16 @@ struct SetupView: View {
                         Divider()
                             .background(Color("MossgateBorder"))
                             .padding(.vertical, 4)
-                        Button(role: .destructive) {
+                        Button {
                             showResetConfirm = true
                         } label: {
                             Text("Reset all progress")
                                 .font(.system(size: 14, weight: .semibold))
-                                .foregroundStyle(.red)
+                                .foregroundStyle(Color("MossgateEmber"))
                                 .frame(maxWidth: .infinity, minHeight: 44)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .strokeBorder(Color.red.opacity(0.5), lineWidth: 1)
+                                        .strokeBorder(Color("MossgateEmber").opacity(0.45), lineWidth: 1)
                                 )
                         }
                         Text("Mossgate v\(AppInfo.shortVersion) (\(AppInfo.build))")
@@ -95,14 +98,28 @@ struct SetupView: View {
                 )
             }
         }
-        .alert("Reset all progress?", isPresented: $showResetConfirm) {
-            Button("Cancel", role: .cancel) { }
-            Button("Reset", role: .destructive) {
-                settings.resetProgress()
-                AudioEngine.shared.tap()
+        // The game's own confirmation card rather than the system alert — see
+        // GameConfirm. It also states plainly that the settings survive, because
+        // "reset all progress" is exactly the sort of button people avoid pressing
+        // when they are not sure what else it takes with it.
+        .overlay {
+            if showResetConfirm {
+                GameConfirm(
+                    title: "Reset all progress?",
+                    message: "Cleared gates and best coin counts go back to nothing. "
+                           + "Your sound, volume and controller settings are kept.",
+                    confirmLabel: "Reset progress",
+                    onConfirm: {
+                        settings.resetProgress()
+                        AudioEngine.shared.tap()
+                        showResetConfirm = false
+                    },
+                    onCancel: {
+                        AudioEngine.shared.tap()
+                        showResetConfirm = false
+                    }
+                )
             }
-        } message: {
-            Text("Cleared levels and best coin counts will be cleared. This can't be undone.")
         }
     }
 
