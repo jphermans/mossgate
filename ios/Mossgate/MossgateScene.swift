@@ -55,6 +55,10 @@ final class MossgateScene: SKScene {
     private var moverPeriodScale: [CGFloat] = []
     /// Run seed the current sky cache was built for.
     private var skyCacheSeed: Int = -1
+    /// Autopilot coin layouts, keyed by level and run seed.
+    private var coinRouteCache: [String: [CGPoint]] = [:]
+    /// Where this load's coins came from: "runner" or "authored" (the fallback).
+    private(set) var coinSource = "authored"
     private var cp: Int = -1
     private var spawnPoint: CGPoint = .zero
     private var checkpointSnap: (point: CGPoint, coins: [Int], cp: Int)?
@@ -273,6 +277,51 @@ final class MossgateScene: SKScene {
         moonTexture = makeMoonTexture()
         lanternTexture = SKTexture(image: GameArt.lanternImage())
         lanternTexture?.filteringMode = .linear
+
+        runAutopilotTestIfRequested()
+    }
+
+    /// Test hook: `-TestAutopilot 1` plays every level with the autopilot and
+    /// reports whether it reached the gate.
+    ///
+    /// This is the honest measure of the coin placement. A level the runner
+    /// cannot finish falls back to the authored positions, and this is how that
+    /// is known rather than assumed.
+    private func runAutopilotTestIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestAutopilot") else { return }
+        let seed = SettingsStore.shared.runSeed
+        var solved = 0
+        for lv in Levels.all {
+            let t = Self.moverTiming(for: lv, seed: seed)
+            let start = Date()
+            let run = Autopilot.run(level: lv, phase: t.phase, period: t.period)
+            let ms = Int(Date().timeIntervalSince(start) * 1000)
+            let coins = Autopilot.coins(run.path, count: lv.coins.count, seed: seed &+ lv.id)
+            if run.reachedGate { solved += 1 }
+            let verdict = run.reachedGate ? "reached gate" : "FAILED      "
+            // How far the ballistic probe moves each coin, and how many coins it
+            // could not place at all. This is the number that matters: it is the
+            // difference the player actually sees.
+            var moved: [CGFloat] = []
+            var unplaced = 0
+            for (i, c) in lv.coins.enumerated() {
+                if let p = Autopilot.variedCoin(near: CGPoint(x: c.x, y: c.y), level: lv,
+                                                phase: t.phase, period: t.period,
+                                                seed: seed &+ i &* 977) {
+                    moved.append(hypot(p.x - c.x, p.y - c.y))
+                } else {
+                    unplaced += 1
+                }
+            }
+            let avg = moved.isEmpty ? 0 : moved.reduce(0, +) / CGFloat(moved.count)
+            let maxMove = moved.max() ?? 0
+            print("[Mossgate:BOT] level \(lv.id) \"\(lv.name)\" \(verdict) "
+                  + "route=\(run.path.count) coins=\(coins.count)/\(lv.coins.count) "
+                  + "\(ms)ms t=\(String(format: "%.1f", run.seconds))s | \(run.reason)")
+            print("[Mossgate:BOT]    probe: moved avg=\(Int(avg)) max=\(Int(maxMove)) units, "
+                  + "unplaceable=\(unplaced)/\(lv.coins.count)")
+        }
+        print("[Mossgate:BOT] TOTAL solved=\(solved)/\(Levels.all.count) seed=\(seed)")
     }
 
     // MARK: - Lantern pickup
@@ -574,6 +623,49 @@ final class MossgateScene: SKScene {
         }
     }
 
+    /// Coins along the autopilot's route for this level and run seed.
+    ///
+    /// The route is a real playthrough with this run's platform timing, so every
+    /// coin sits somewhere a finishing player actually occupied — reachability by
+    /// construction rather than by hope. If the runner never reached the gate the
+    /// authored positions are nudged instead: a worse layout, but a correct one.
+    ///
+    /// Cached, because the simulation is the expensive part of a load and
+    /// loadLevel can run several times in one layout pass.
+    private func aiCoinPositions() -> [CGPoint] {
+        let key = "\(levelIndex)-\(SettingsStore.shared.runSeed)"
+        if let cached = coinRouteCache[key] { return cached }
+
+        let route = Autopilot.route(level: level,
+                                    phase: moverPhaseOffset,
+                                    period: moverPeriodScale)
+        var out: [CGPoint] = []
+        coinSource = "authored"
+        if !route.isEmpty {
+            let placed = Autopilot.coins(route, count: level.coins.count,
+                                         seed: SettingsStore.shared.runSeed &+ level.id)
+            if placed.count == level.coins.count {
+                out = placed
+                coinSource = "runner"
+            }
+        }
+        if out.isEmpty {
+            // The runner could not finish this level, so prove each coin
+            // individually instead: launch the real physics from the ground under
+            // the authored position and put the coin wherever the launch went.
+            // Narrower than a full route, but it holds for every level.
+            out = level.coins.enumerated().map { i, c in
+                Autopilot.variedCoin(near: CGPoint(x: c.x, y: c.y), level: level,
+                                     phase: moverPhaseOffset, period: moverPeriodScale,
+                                     seed: SettingsStore.shared.runSeed &+ i &* 977)
+                ?? variedPickup(x: c.x, y: c.y, index: i)
+            }
+            coinSource = "probe"
+        }
+        coinRouteCache[key] = out
+        return out
+    }
+
     /// Nudges a pickup to a per-run position, rejected if the new spot would sit
     /// inside solid ground. Keeps the placement honest: a reshuffle can move a
     /// coin but can never bury it.
@@ -590,6 +682,19 @@ final class MossgateScene: SKScene {
             }
         }
         return candidate
+    }
+
+    /// Per-run mover timing for a level, from the run seed. One definition so the
+    /// scene and the autopilot test cannot disagree about it.
+    static func moverTiming(for level: Level, seed: Int) -> (phase: [CGFloat], period: [CGFloat]) {
+        var rng = SplitMix64(state: UInt64(bitPattern: Int64(seed)) &* 0xDA94_2042_4B4E_5F8D)
+        let phase = level.movers.map { _ in
+            CGFloat(Double(rng.next() % 10_000) / 10_000.0) * 2 * .pi
+        }
+        let period = level.movers.map { _ in
+            0.85 + CGFloat(Double(rng.next() % 1_000) / 1_000.0) * 0.30
+        }
+        return (phase, period)
     }
 
     func retryLevel() { loadLevel(index: levelIndex, toState: .play) }
@@ -846,14 +951,9 @@ final class MossgateScene: SKScene {
         // Match engine.ts loadLevel: seed positions, evaluate the mover curve at
         // t = 0, then zero the delta so the first substep doesn't jerk the rider.
         // The per-run timing offsets must exist before placeMovers() reads them.
-        var moverRng = SplitMix64(state: UInt64(bitPattern: Int64(SettingsStore.shared.runSeed))
-                                         &* 0xDA94_2042_4B4E_5F8D)
-        moverPhaseOffset = level.movers.map { _ in
-            CGFloat(Double(moverRng.next() % 10_000) / 10_000.0) * 2 * .pi
-        }
-        moverPeriodScale = level.movers.map { _ in
-            0.85 + CGFloat(Double(moverRng.next() % 1_000) / 1_000.0) * 0.30
-        }
+        let timing = Self.moverTiming(for: level, seed: SettingsStore.shared.runSeed)
+        moverPhaseOffset = timing.phase
+        moverPeriodScale = timing.period
         moverPositions = level.movers.map { CGPoint(x: $0.x, y: $0.y) }
         placeMovers()
         moverPrev = moverPositions
@@ -905,11 +1005,11 @@ final class MossgateScene: SKScene {
         flagNode.position = CGPoint(x: level.flag.x * viewScale, y: level.flag.y * viewScale)
         addWorldChild(flagNode)
 
-        // Coins
+        // Coins. Positioned by the autopilot where it can manage it — see
+        // aiCoinPositions() — so the row is somewhere a player who finished the
+        // level has actually stood, rather than the same template every run.
         coinNodes = []
-        coinPos = level.coins.enumerated().map {
-            variedPickup(x: $0.element.x, y: $0.element.y, index: $0.offset)
-        }
+        coinPos = aiCoinPositions()
         for i in level.coins.indices {
             let node = SKSpriteNode(texture: coinFrames.first, color: .white,
                                     size: CGSize(width: 26 * viewScale, height: 26 * viewScale))

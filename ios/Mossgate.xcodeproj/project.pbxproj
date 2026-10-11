@@ -28,6 +28,7 @@
 		7AC3E592CD0D8C2839A04A3F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A692694B41AA757BEE2A97B3 /* AboutView.swift */; };
 		7AD60B3631548B18A3BBCBEF /* coin-1.png in Resources */ = {isa = PBXBuildFile; fileRef = AD463A8F27CCB04FFBC5B3D5 /* coin-1.png */; };
 		85D8E3C2AE475620491C2680 /* dusk.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 653273BEAEE9FA37F2A54538 /* dusk.m4a */; };
+		85F860C1AFE02094E5446E2B /* Autopilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD7B26F6CE445E7B06F9E22 /* Autopilot.swift */; };
 		86CC4DA8B2ECE2FBD394D066 /* block.png in Resources */ = {isa = PBXBuildFile; fileRef = 3AC54C209839553DCEFF24A0 /* block.png */; };
 		90AB3F0656EED9C5EEFA1D5B /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3079C6DCC25B2043D1094B29 /* SettingsStore.swift */; };
 		91FE202F303157A0E1AA3ED8 /* run-3.png in Resources */ = {isa = PBXBuildFile; fileRef = 42A7B0FC4C6C8945DE9695E7 /* run-3.png */; };
@@ -57,6 +58,7 @@
 /* Begin PBXFileReference section */
 		0485FDC6A40826162B74C254 /* ledge.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = ledge.png; sourceTree = "<group>"; };
 		08B54241A4DB3F3AB7434FE8 /* run-4.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "run-4.png"; sourceTree = "<group>"; };
+		0DD7B26F6CE445E7B06F9E22 /* Autopilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autopilot.swift; sourceTree = "<group>"; };
 		1BF2363ED17F03C16D187541 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1D0A8385B1BE7ADF6585BDA6 /* checkpoint.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = checkpoint.png; sourceTree = "<group>"; };
 		3079C6DCC25B2043D1094B29 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
@@ -120,6 +122,7 @@
 				377ACF894833CE4702A004C9 /* AppDelegate.swift */,
 				1BF2363ED17F03C16D187541 /* Assets.xcassets */,
 				C9AED1889F92171EC5C7C17D /* AudioEngine.swift */,
+				0DD7B26F6CE445E7B06F9E22 /* Autopilot.swift */,
 				CDD4419F7B9485FD2A7A297A /* GameArt.swift */,
 				31AEE4DA1BAA6886EF0CA064 /* GameCenterManager.swift */,
 				70BD29C7FBBFCB3E8F0E4C6C /* GamepadManager.swift */,
@@ -297,6 +300,7 @@
 				7AC3E592CD0D8C2839A04A3F /* AboutView.swift in Sources */,
 				FAACA7FF298B47B6655D3701 /* AppDelegate.swift in Sources */,
 				30DCB53952D33AB7473FDA86 /* AudioEngine.swift in Sources */,
+				85F860C1AFE02094E5446E2B /* Autopilot.swift in Sources */,
 				DC7BE800063B0998F4C9D587 /* GameArt.swift in Sources */,
 				FB1D433C6D72EAB12141DAB3 /* GameCenterManager.swift in Sources */,
 				28EA0CF96DF3C2E370389371 /* GamepadManager.swift in Sources */,
@@ -352,7 +356,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -387,7 +391,7 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.4.1;
+				MARKETING_VERSION = 0.5.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -469,7 +473,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 13;
+				CURRENT_PROJECT_VERSION = 14;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -498,7 +502,7 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.4.1;
+				MARKETING_VERSION = 0.5.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = Mossgate;
