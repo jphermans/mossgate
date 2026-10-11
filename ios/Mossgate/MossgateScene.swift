@@ -92,6 +92,10 @@ final class MossgateScene: SKScene {
     var onPhaseChange: ((GameState, HudInfo) -> Void)?
     var onCoinsChange: ((Int) -> Void)?
 
+    /// True once loadLevel has completed at least once. Render() bails out before this
+    /// is set, avoiding crashes during view transitions where arrays are briefly inconsistent.
+    private var isLoaded = false
+
     struct HudInfo {
         let phase: GameState
         let levelName: String
@@ -198,6 +202,12 @@ final class MossgateScene: SKScene {
     private func loadLevel(index: Int, toState: GameState) {
         levelIndex = index
         level = Levels.all[index]
+        // Clear arrays BEFORE clearing worldNode, otherwise old node refs leak
+        // across multiple loadLevel calls (didMove + startLevel).
+        solidNodes.removeAll(keepingCapacity: true)
+        moverNodes.removeAll(keepingCapacity: true)
+        spikeNodes.removeAll(keepingCapacity: true)
+        checkpointNodes.removeAll(keepingCapacity: true)
         worldNode.removeAllChildren()
         coinsGot = []
         cp = -1
@@ -268,6 +278,7 @@ final class MossgateScene: SKScene {
 
         camX = clamp(level.spawn.x - 180, 0, max(0, level.width - 720))
         camY = clamp(level.spawn.y - 280, 0, max(0, level.height - 360))
+        isLoaded = true
         setState(toState)
         notifyPhase()
     }
@@ -296,6 +307,7 @@ final class MossgateScene: SKScene {
     override func update(_ currentTime: TimeInterval) {
         let dt: CGFloat = lastTime == 0 ? 1/60 : CGFloat(min(0.05, currentTime - lastTime))
         lastTime = currentTime
+        guard isLoaded else { return }
 
         switch state {
         case .play:
@@ -547,6 +559,8 @@ final class MossgateScene: SKScene {
     private func placeMovers() {
         moverPrev = moverPositions
         for (i, m) in level.movers.enumerated() {
+            precondition(i < moverPositions.count, "placeMovers: i \(i) >= moverPositions.count \(moverPositions.count) at level \(level.name)")
+            precondition(i < moverNodes.count, "placeMovers: i \(i) >= moverNodes.count \(moverNodes.count) at level \(level.name)")
             let s = sin((time / m.period) * 2 * .pi + m.phase)
             if m.axis == "x" {
                 let px = m.x + s * m.distance + m.w/2
@@ -605,6 +619,9 @@ final class MossgateScene: SKScene {
     // ── Render ────────────────────────────────────────────────────
 
     private func render() {
+        // Bail early if the level isn't fully loaded — prevents Index-out-of-range
+        // crashes during view transitions where the scene briefly has inconsistent arrays.
+        guard isLoaded else { return }
         // Player
         let frames = (!grounded && !jumpFrames.isEmpty) ? jumpFrames
                     : (abs(playerVx) > 28 && grounded && !runFrames.isEmpty) ? runFrames
@@ -625,16 +642,16 @@ final class MossgateScene: SKScene {
 
         // Coin spin & bob
         for (i, node) in coinNodes.enumerated() where !coinsGot.contains(i) {
-            let frame = Int(time * 8) % coinFrames.count
-            node.texture = coinFrames[frame]
+            let frame = (coinFrames.isEmpty ? 0 : Int(time * 8) % coinFrames.count)
+            node.texture = coinFrames[safe: frame] ?? node.texture
             let bob = sin(time * 3.2 + CGFloat(i)) * 3
-            let c = level.coins[i]
-            node.position = CGPoint(x: c.x, y: c.y + bob)
+            if i < level.coins.count {
+                let c = level.coins[i]
+                node.position = CGPoint(x: c.x, y: c.y + bob)
+            }
             node.isHidden = false
         }
-        for (i, node) in coinNodes.enumerated() where coinsGot.contains(i) {
-            node.isHidden = true
-        }
+        for node in coinNodes where !node.isHidden { node.isHidden = true }
 
         // Flag
         if !flagFrames.isEmpty {
@@ -645,17 +662,21 @@ final class MossgateScene: SKScene {
 
         // Checkpoints
         for (i, node) in checkpointNodes.enumerated() {
-            let c = level.checkpoints[i]
-            node.position = CGPoint(x: c.x, y: c.y - 36)
+            if i < level.checkpoints.count {
+                let c = level.checkpoints[i]
+                node.position = CGPoint(x: c.x, y: c.y - 36)
+            }
             let lit = i <= cp
             node.color = lit ? .white : .gray
             node.colorBlendFactor = lit ? 0 : 0.6
         }
 
-        // Solids + movers (their loadLevel positions are correct; movers update each step)
+        // Movers
         for (i, m) in level.movers.enumerated() {
-            let p = moverPositions[i]
-            moverNodes[i].position = CGPoint(x: p.x, y: p.y)
+            if i < moverPositions.count, i < moverNodes.count {
+                let p = moverPositions[i]
+                moverNodes[i].position = CGPoint(x: p.x, y: p.y)
+            }
         }
     }
 
