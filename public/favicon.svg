@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Mossgate">
+  <rect width="32" height="32" rx="7" fill="#0c1c1f"/>
+  <rect x="4" y="23" width="24" height="5" rx="2" fill="#1f4d3a"/>
+  <circle cx="16" cy="13.5" r="8" fill="#c46a32"/>
+  <circle cx="16" cy="13.5" r="5.4" fill="#f0a040"/>
+  <rect x="14.6" y="5.2" width="2.8" height="3.4" rx="0.7" fill="#f4ead4"/>
+</svg>

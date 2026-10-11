@@ -1,0 +1,137 @@
+@import "tailwindcss";
+@import "@fontsource/fraunces/600.css";
+@import "@fontsource/outfit/400.css";
+@import "@fontsource/outfit/500.css";
+@import "@fontsource/outfit/600.css";
+
+@theme {
+  --color-bg: #0c1c1f;
+  --color-surface: #14302c;
+  --color-fg: #f4ead4;
+  --color-muted: #9bb5a8;
+  --color-primary: #f0a040;
+  --color-primary-fg: #1a1208;
+  --color-border: #2c4a42;
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: var(--color-bg);
+    color: var(--color-fg);
+  }
+}
+
+.shell {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.hud {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+}
+
+.menu-scroll {
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+}
+
+.controls {
+  display: none;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
+  padding: 0.75rem;
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+}
+
+.pad {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.5rem;
+  min-height: 4.5rem;
+  border-radius: 1rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-fg);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.pad-jump {
+  min-width: 5.75rem;
+  min-height: 5.75rem;
+  border-radius: 999px;
+  border-color: transparent;
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.pad-drop {
+  min-width: 4rem;
+  min-height: 4rem;
+}
+
+.pad[data-pressed="true"] {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+  border-color: transparent;
+}
+
+@media (pointer: coarse), (max-width: 800px) {
+  .shell[data-phase="play"] .controls {
+    display: flex;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .shell[data-phase="play"] .controls {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    border-top: 0;
+    background: transparent;
+    pointer-events: none;
+  }
+
+  .shell[data-phase="play"] .controls .pad {
+    pointer-events: auto;
+    background: color-mix(in srgb, var(--color-bg) 78%, transparent);
+    backdrop-filter: blur(10px);
+  }
+
+  .shell[data-phase="play"] .controls .pad-jump,
+  .shell[data-phase="play"] .controls .pad[data-pressed="true"] {
+    background: var(--color-primary);
+    color: var(--color-primary-fg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    backdrop-filter: none;
+  }
+}
