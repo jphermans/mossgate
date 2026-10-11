@@ -96,6 +96,30 @@ final class MossgateScene: SKScene {
     /// is set, avoiding crashes during view transitions where arrays are briefly inconsistent.
     private var isLoaded = false
 
+    private func debugWrite(_ s: String) {
+        let path = NSTemporaryDirectory() + "mossgate-debug.log"
+        let payload = s + "\n"
+        if let data = payload.data(using: .utf8) {
+            if let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path)) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                try? handle.close()
+            } else {
+                try? data.write(to: URL(fileURLWithPath: path))
+            }
+        }
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+        debugWrite("=== init(coder) ===")
+    }
+
+    override init(size: CGSize) {
+        super.init(size: size)
+        debugWrite("=== init(size:\(size)) ===\nself=\(Unmanaged.passUnretained(self).toOpaque())")
+    }
+
     struct HudInfo {
         let phase: GameState
         let levelName: String
@@ -111,28 +135,37 @@ final class MossgateScene: SKScene {
         backgroundColor = UIColor(named: "MossgateDusk") ?? UIColor(red: 12/255, green: 28/255, blue: 31/255, alpha: 1)
         view.ignoresSiblingOrder = true
         scaleMode = .resizeFill
-        // Top-left origin: scene (0, 0) = top-left corner of the scene buffer.
-        // Combined with scene.size (720, 360) and worldNode.position = (-camX, -camY),
-        // the world region [camX, camX+720] x [camY, camY+360] maps directly onto
-        // the scene buffer [0, 720] x [0, 360]. The default anchorPoint (0.5, 0.5)
-        // would put scene (0, 0) at the center, which means our top-left world
-        // origin would render BELOW the scene bottom — everything off-screen.
+        // Top-left origin so scene (0, 0) is the top-left corner of the buffer.
         anchorPoint = CGPoint(x: 0, y: 0)
-        camera = cameraNode
+        // No SKCameraNode — the worldNode translation IS the camera.
+        camera = nil
         // addChild is idempotent — re-attach safely if SwiftUI re-presents this scene.
-        if cameraNode.parent !== self { addChild(cameraNode) }
         if worldNode.parent !== self { addChild(worldNode) }
         if particleLayer.parent !== self { addChild(particleLayer) }
 
         loadTextures()
         addChild(hudNode)
-        loadLevel(index: 0, toState: .title)
+        recomputeViewScale()
+        // DEBUG: write state to file so we can read it back from the simulator
+        let debugPath = NSTemporaryDirectory() + "mossgate-debug.log"
+        let info = """
+        === didMove ===
+        sceneSize: \(size)
+        viewScale: \(viewScale)
+        camY: \(camY)
+        worldNode.parent: \(String(describing: worldNode.parent))
+        worldNode.position: \(worldNode.position)
+        children of self: \(children.count)
+        children of worldNode: \(worldNode.children.count)
+        """
+        try? info.write(toFile: debugPath, atomically: true, encoding: .utf8)
     }
 
     override func didChangeSize(_ oldSize: CGSize) {
         super.didChangeSize(oldSize)
         recomputeViewScale()
-        positionCamera(immediately: true)
+        // Re-place at current scale so sprites snap to new positions on rotation.
+        if isLoaded { loadLevel(index: levelIndex, toState: state) }
     }
 
     // The world is wider than tall — scale so the camera shows ~720 wide.
@@ -226,8 +259,10 @@ final class MossgateScene: SKScene {
         // Solids
         for s in level.solids {
             let tex = s.oneway ? ledgeTexture : blockTexture
-            let node = SKSpriteNode(texture: tex, color: .white, size: CGSize(width: s.w, height: s.h))
-            node.position = CGPoint(x: s.x + s.w/2, y: s.y + s.h/2)
+            let node = SKSpriteNode(texture: tex, color: .white,
+                                    size: CGSize(width: s.w * viewScale, height: s.h * viewScale))
+            node.position = CGPoint(x: (s.x + s.w/2) * viewScale,
+                                    y: (s.y + s.h/2) * viewScale)
             node.colorBlendFactor = 0
             worldNode.addChild(node)
             solidNodes.append(node)
@@ -236,8 +271,9 @@ final class MossgateScene: SKScene {
         // Movers
         for m in level.movers {
             let node = SKSpriteNode(texture: ledgeTexture, color: .white,
-                                    size: CGSize(width: m.w, height: m.h))
-            node.position = CGPoint(x: m.x + m.w/2, y: m.y + m.h/2)
+                                    size: CGSize(width: m.w * viewScale, height: m.h * viewScale))
+            node.position = CGPoint(x: (m.x + m.w/2) * viewScale,
+                                    y: (m.y + m.h/2) * viewScale)
             worldNode.addChild(node)
             moverNodes.append(node)
         }
@@ -245,8 +281,9 @@ final class MossgateScene: SKScene {
         // Spikes
         for sp in level.spikes {
             let node = SKSpriteNode(texture: spikeTexture, color: .white,
-                                    size: CGSize(width: sp.w, height: sp.h))
-            node.position = CGPoint(x: sp.x + sp.w/2, y: sp.y + sp.h/2)
+                                    size: CGSize(width: sp.w * viewScale, height: sp.h * viewScale))
+            node.position = CGPoint(x: (sp.x + sp.w/2) * viewScale,
+                                    y: (sp.y + sp.h/2) * viewScale)
             worldNode.addChild(node)
             spikeNodes.append(node)
         }
@@ -254,31 +291,32 @@ final class MossgateScene: SKScene {
         // Checkpoints
         for c in level.checkpoints {
             let node = SKSpriteNode(texture: checkpointTexture, color: .white,
-                                    size: CGSize(width: 48, height: 72))
-            node.position = CGPoint(x: c.x, y: c.y - 36)
+                                    size: CGSize(width: 48 * viewScale, height: 72 * viewScale))
+            node.position = CGPoint(x: c.x * viewScale, y: (c.y - 36) * viewScale)
             worldNode.addChild(node)
             checkpointNodes.append(node)
         }
 
         // Flag
         flagNode = SKSpriteNode(texture: flagFrames.first, color: .white,
-                                size: CGSize(width: 42, height: 92))
-        flagNode.position = CGPoint(x: level.flag.x, y: level.flag.y)
+                                size: CGSize(width: 42 * viewScale, height: 92 * viewScale))
+        flagNode.position = CGPoint(x: level.flag.x * viewScale, y: level.flag.y * viewScale)
         worldNode.addChild(flagNode)
 
         // Coins
         coinNodes = []
         for c in level.coins {
             let node = SKSpriteNode(texture: coinFrames.first, color: .white,
-                                    size: CGSize(width: 26, height: 26))
-            node.position = CGPoint(x: c.x, y: c.y)
+                                    size: CGSize(width: 26 * viewScale, height: 26 * viewScale))
+            node.position = CGPoint(x: c.x * viewScale, y: c.y * viewScale)
             node.alpha = 1
             worldNode.addChild(node)
             coinNodes.append(node)
         }
 
         // Player
-        let pSize = CGSize(width: Phys.playerW * 1.6, height: Phys.playerH * 1.6)
+        let pSize = CGSize(width: Phys.playerW * 1.6 * viewScale,
+                           height: Phys.playerH * 1.6 * viewScale)
         playerNode = SKSpriteNode(texture: idleFrames.first, color: .white, size: pSize)
         worldNode.addChild(playerNode)
         placePlayer(at: level.spawn)
@@ -286,6 +324,27 @@ final class MossgateScene: SKScene {
         camX = clamp(level.spawn.x - 180, 0, max(0, level.width - 720))
         camY = clamp(level.spawn.y - 280, 0, max(0, level.height - 360))
         isLoaded = true
+        // DEBUG: append loadLevel state to file
+        let loadInfo = """
+        === loadLevel idx=\(levelIndex) ===
+        solids=\(solidNodes.count) movers=\(moverNodes.count) spikes=\(spikeNodes.count)
+        coins=\(coinNodes.count) chkpts=\(checkpointNodes.count)
+        flag=\(flagNode == nil ? "nil" : "ok") player=\(playerNode == nil ? "nil" : "ok")
+        viewScale=\(viewScale) camY=\(camY) size=\(size)
+        worldNode.parent=\(String(describing: worldNode.parent))
+        worldNode.position=\(worldNode.position)
+        """
+        let path = NSTemporaryDirectory() + "mossgate-debug.log"
+        if let data = (loadInfo + "\n").data(using: .utf8) {
+            if let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path)) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                try? handle.close()
+            } else {
+                try? data.write(to: URL(fileURLWithPath: path))
+            }
+        }
+        print("[Mossgate] loadLevel: solids=\(solidNodes.count) movers=\(moverNodes.count) spikes=\(spikeNodes.count) coins=\(coinNodes.count) checkpoints=\(checkpointNodes.count) flag=\(flagNode != nil) player=\(playerNode != nil) viewScale=\(viewScale) camY=\(camY)")
         setState(toState)
         notifyPhase()
     }
@@ -616,9 +675,9 @@ final class MossgateScene: SKScene {
     // ── Camera ────────────────────────────────────────────────────
     //
     // We don't use a SKCameraNode. Instead, each frame we translate `worldNode` by
-    // (-camX, -camY), so the world region [camX, camX+720] x [camY, camY+360]
-    // maps onto the scene buffer [0, 720] x [0, 360]. SpriteKit then scales that
-    // buffer to fit the SKView via .resizeFill.
+    // (-camX * viewScale, -camY * viewScale), so the world region [camX, camX+720]
+    // x [camY, camY+360] maps onto the scene buffer [0, scene.width] x [0, scene.height]
+    // where viewScale = scene.width / 720.
     //
     // Camera FOLLOW logic (move camX/camY based on player position) lives in
     // `step()`. This function only applies the camera transform + screen shake.
@@ -634,16 +693,22 @@ final class MossgateScene: SKScene {
         let shake = trauma * trauma
         let shakeX = (sin(time * 47) * 0.5 + sin(time * 23) * 0.5) * 10 * shake
         let shakeY = (cos(time * 41) * 0.5 + sin(time * 19) * 0.5) * 7 * shake
-        worldNode.position = CGPoint(x: -camX + shakeX, y: -camY + shakeY)
+        worldNode.position = CGPoint(x: -camX * viewScale + shakeX,
+                                     y: -camY * viewScale + shakeY)
+        // DEBUG
+        if Int(time * 4) != lastDebugFrame {
+            lastDebugFrame = Int(time * 4)
+            print("[Mossgate] frame: sceneSize=\(size) viewScale=\(viewScale) camY=\(camY) worldNode.pos=\(worldNode.position)")
+        }
     }
+    private var lastDebugFrame: Int = -1
 
     private var dtForShake: CGFloat = 1/60
 
     // ── Render ────────────────────────────────────────────────────
 
     private func render() {
-        // Bail early if the level isn't fully loaded — prevents Index-out-of-range
-        // crashes during view transitions where the scene briefly has inconsistent arrays.
+        // Bail early if the level isn't fully loaded.
         guard isLoaded else { return }
         // Player
         let frames = (!grounded && !jumpFrames.isEmpty) ? jumpFrames
@@ -658,8 +723,10 @@ final class MossgateScene: SKScene {
             }
             playerNode.texture = frames[idx]
         }
-        // SKCameraNode centers the view on its position; node positions are in world coords.
-        playerNode.position = CGPoint(x: playerX + Phys.playerW/2, y: playerY + Phys.playerH/2)
+        playerNode.position = CGPoint(
+            x: (playerX + Phys.playerW/2) * viewScale,
+            y: (playerY + Phys.playerH/2) * viewScale
+        )
         playerNode.xScale = facing
         playerNode.yScale = 1
 
@@ -670,7 +737,7 @@ final class MossgateScene: SKScene {
             let bob = sin(time * 3.2 + CGFloat(i)) * 3
             if i < level.coins.count {
                 let c = level.coins[i]
-                node.position = CGPoint(x: c.x, y: c.y + bob)
+                node.position = CGPoint(x: c.x * viewScale, y: (c.y + bob) * viewScale)
             }
             node.isHidden = false
         }
@@ -681,13 +748,13 @@ final class MossgateScene: SKScene {
             let idx = Int(time * 6) % flagFrames.count
             flagNode.texture = flagFrames[idx]
         }
-        flagNode.position = CGPoint(x: level.flag.x, y: level.flag.y)
+        flagNode.position = CGPoint(x: level.flag.x * viewScale, y: level.flag.y * viewScale)
 
         // Checkpoints
         for (i, node) in checkpointNodes.enumerated() {
             if i < level.checkpoints.count {
                 let c = level.checkpoints[i]
-                node.position = CGPoint(x: c.x, y: c.y - 36)
+                node.position = CGPoint(x: c.x * viewScale, y: (c.y - 36) * viewScale)
             }
             let lit = i <= cp
             node.color = lit ? .white : .gray
@@ -695,10 +762,10 @@ final class MossgateScene: SKScene {
         }
 
         // Movers
-        for (i, m) in level.movers.enumerated() {
+        for (i, _) in level.movers.enumerated() {
             if i < moverPositions.count, i < moverNodes.count {
                 let p = moverPositions[i]
-                moverNodes[i].position = CGPoint(x: p.x, y: p.y)
+                moverNodes[i].position = CGPoint(x: p.x * viewScale, y: p.y * viewScale)
             }
         }
     }

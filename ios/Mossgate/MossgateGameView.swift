@@ -1,39 +1,61 @@
 import SwiftUI
 import SpriteKit
 
-/// SwiftUI wrapper around the SpriteKit game scene. Owns the SKView lifetime,
-/// pipes phase/HUD info back to the parent view via callbacks, and exposes the
-/// live scene through `GameSession` so RootView can drive touch input directly.
+/// SwiftUI wrapper around the SpriteKit game scene. The SKScene dynamically
+/// matches the SKView's actual size — viewScale converts world units (designed
+/// for a 720×360 logical canvas) to scene points. That way the game looks the
+/// same on every iPhone, regardless of screen size.
 struct MossgateGameView: UIViewRepresentable {
+    static let worldWidth: CGFloat = 720
+    static let worldHeight: CGFloat = 360
+
     let levelIndex: Int
     let session: GameSession
     @Binding var hud: MossgateScene.HudInfo
 
+    /// SKView subclass that updates the scene's size every time its bounds change.
+    /// This is the standard SpriteKit pattern; without it, the scene renders into
+    /// a 0×0 buffer because SwiftUI doesn't update bounds during `layoutIfNeeded()`.
+    final class ResizableSKView: SKView {
+        weak var sceneRef: SKScene?
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard bounds.size.width > 0, bounds.size.height > 0 else { return }
+            if let s = sceneRef, s.size != bounds.size {
+                s.size = bounds.size
+            }
+        }
+    }
+
     func makeUIView(context: Context) -> SKView {
-        let view = SKView(frame: .zero)
+        let view = ResizableSKView(frame: .zero)
         view.backgroundColor = UIColor(named: "MossgateDusk") ?? .black
         view.preferredFramesPerSecond = 60
         view.showsFPS = false
         view.showsNodeCount = false
         view.ignoresSiblingOrder = true
 
-        // Fixed 720×360 logical scene; resizeFill scales it to the device's actual
-        // size so every world unit = 1 scene point, regardless of iPhone model.
         let scene = MossgateScene(size: CGSize(width: 720, height: 360))
         scene.scaleMode = .resizeFill
         scene.onPhaseChange = { _, info in
             DispatchQueue.main.async { hud = info }
         }
-        scene.startLevel(levelIndex)
         context.coordinator.scene = scene
         session.scene = scene
+        view.sceneRef = scene
         view.presentScene(scene)
+        scene.startLevel(levelIndex)
         return view
     }
 
     func updateUIView(_ uiView: SKView, context: Context) {
         guard let scene = context.coordinator.scene else { return }
         session.scene = scene
+        if uiView.bounds.size.width > 0,
+           scene.size != uiView.bounds.size {
+            scene.size = uiView.bounds.size
+            scene.startLevel(levelIndex)
+        }
         if scene.levelIndex != levelIndex {
             scene.startLevel(levelIndex)
         }
@@ -46,17 +68,13 @@ struct MossgateGameView: UIViewRepresentable {
     }
 }
 
-/// Shared object between RootView and MossgateGameView. The view writes the
-/// live scene into `scene` once it's created; RootView reads it to push touch
-/// state and trigger pause/resume/retry. Using a shared object beats walking
-/// the UIViewController tree to find the SKView, which is unreliable under the
-/// SwiftUI hosting hierarchy.
+/// Shared object between RootView and MossgateGameView.
 @MainActor
 final class GameSession: ObservableObject {
     weak var scene: MossgateScene?
 }
 
-/// Touch input bridge — exposes four booleans the scene polls each frame.
+/// Touch input bridge.
 final class TouchState: ObservableObject {
     @Published var left = false
     @Published var right = false
