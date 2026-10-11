@@ -213,7 +213,7 @@ struct TitleView: View {
                                     } else {
                                         if settings.cleared[level.id] {
                                             Text("CLEAR")
-                                                .font(.system(size: 10, weight: .heavy))
+                                                .font(.system(size: 16, weight: .heavy))
                                                 .tracking(2)
                                                 .foregroundStyle(Color("MossgateLantern"))
                                         }

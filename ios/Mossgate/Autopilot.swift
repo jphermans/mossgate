@@ -111,7 +111,9 @@ enum Autopilot {
                 vy *= 0.48
                 canCut = false
             }
-            if input.down && !prevDown { dropRequested = true }
+            // No DOWN-to-drop here either: the scene stopped treating DOWN as a drop
+            // request, and the simulation must model the game that actually ships, or
+            // the coins it places are placed for a player who does not exist.
             prevDown = input.down
             inDown = input.down
 

@@ -731,10 +731,14 @@ final class MossgateScene: SKScene {
         }
     }
 
-    /// Test hook: `-TestDrop 1` parks the player on the level's first one-way
-    /// ledge, waits for them to settle, then taps DOWN and logs whether
-    /// `tryDrop()` actually fired. Lets a headless run prove the DOWN pad works
-    /// without a human on the simulator.
+    /// Test hook: `-TestDrop 1` parks the player on the level's first one-way ledge,
+    /// waits for them to settle, then checks BOTH halves of the rule:
+    ///
+    ///  1. tapping DOWN must not drop them through the ledge, and
+    ///  2. an explicit drop request still must.
+    ///
+    /// The second half is what keeps the first honest. "DOWN did not drop you" also
+    /// passes if dropping has simply stopped working, so the pair is the test.
     private func runDropTestHookIfRequested() {
         guard ProcessInfo.processInfo.arguments.contains("-TestDrop"),
               let ow = level.solids.first(where: { $0.oneway }) else { return }
@@ -751,10 +755,26 @@ final class MossgateScene: SKScene {
                 let grounded = self.grounded
                 self.setTouch(down: true)    // the DOWN pad press
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                    self.setTouch(down: false)
+                    self.setTouch(down: false)   // release, and stay released
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                    print("[Mossgate] TESTDROP onLedge=\(kindBefore) grounded=\(grounded) yBefore=\(Int(yBefore)) yAfter=\(Int(self.playerY)) kindAfter=\(self.groundKind) fell=\(Int(self.playerY - yBefore))")
+                    let fellOnTap = Int(self.playerY - yBefore)
+                    let held = self.grounded && self.groundKind == kindBefore
+                    let verdict = (fellOnTap == 0 && held)
+                        ? "OK down-did-not-drop" : "FAIL down-DID-drop"
+                    print("[Mossgate] TESTDROP onLedge=\(kindBefore) grounded=\(grounded) "
+                          + "yBefore=\(Int(yBefore)) yAfter=\(Int(self.playerY)) "
+                          + "fellOnDownTap=\(fellOnTap) stillOnLedge=\(held) \(verdict)")
+
+                    // Negative control: the drop itself must still work, otherwise the
+                    // line above would pass simply because dropping had broken.
+                    self.setTouch(drop: true)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        let fellOnDrop = Int(self.playerY - yBefore)
+                        let dropVerdict = fellOnDrop > 4
+                            ? "OK drop-mechanic-still-works" : "FAIL drop-broken"
+                        print("[Mossgate] TESTDROP explicitDrop fell=\(fellOnDrop) \(dropVerdict)")
+                    }
                 }
             }
         }
@@ -1006,14 +1026,12 @@ final class MossgateScene: SKScene {
         if let v = right { touchRight = v }
         if let v = jump { touchJump = v }
         if let v = down {
-            // The DOWN pad is a one-shot "step off the ledge you are standing on"
-            // in the original game: mossgate.tsx wires its pointer-down to
-            // setTouch("drop", true), and engine.ts turn that into
-            // `touch.drop = true` (consumed by tryDrop()). Mirror that here by
-            // firing the one-shot on the rising edge, otherwise a plain tap of
-            // DOWN only sets the *held* state, which is read solely inside
-            // tryJump() — and that bails out unless a jump was queued.
-            if v && !touchDown { dropRequested = true }
+            // DOWN looks down (and dives while airborne); it must NOT step off the
+            // ledge you are standing on. It used to: the original game wired the DOWN
+            // pad to setTouch("drop", true), so tapping DOWN to peek dropped you
+            // straight through the one-way platform you were standing on. The drop is
+            // still reachable through the explicit `drop:` argument below, which is
+            // what -TestDrop uses to keep the mechanic honest.
             touchDown = v
         }
         if let v = drop { if v { dropRequested = true } }
@@ -1027,7 +1045,7 @@ final class MossgateScene: SKScene {
         if let v = right { padRight = v }
         if let v = jump { padJump = v }
         if let v = down {
-            if v && !padDown { dropRequested = true }   // same rising-edge one-shot
+            // Same rule as the pad: controller DOWN must not drop you off a ledge.
             padDown = v
         }
     }
