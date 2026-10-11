@@ -87,6 +87,10 @@ final class MossgateScene: SKScene {
     private var checkpointTexture: SKTexture!
     private var blockTexture: SKTexture!
     private var ledgeTexture: SKTexture!
+    private var skyTexture: SKTexture?
+    private var emberSkyTexture: SKTexture?
+    private var moonTexture: SKTexture?
+    private var skyNode: SKNode?
 
     // Callbacks to SwiftUI
     var onPhaseChange: ((GameState, HudInfo) -> Void)?
@@ -204,6 +208,132 @@ final class MossgateScene: SKScene {
         checkpointTexture.filteringMode = .nearest
         blockTexture.filteringMode = .nearest
         ledgeTexture.filteringMode = .nearest
+
+        // Procedurally generated sky textures (one per world so the mood shifts
+        // between Mossgate Dusk and Ember Caves). Reused across levels.
+        skyTexture = makeSkyTexture(seed: 0x4D_6F_73)
+        emberSkyTexture = makeSkyTexture(seed: 0x45_6D_62, ember: true)
+        moonTexture = makeMoonTexture()
+    }
+
+    // MARK: - Procedural sky
+
+    /// Builds a 256x256 dusk-sky tile: gradient + scattered stars. Reused as a
+    /// background fill via SKSpriteNode. `ember = true` shifts the palette to
+    /// the warm lava world look.
+    private func makeSkyTexture(seed: UInt64, ember: Bool = false) -> SKTexture {
+        let size = CGSize(width: 256, height: 256)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            let cg = ctx.cgContext
+            let top, mid1, mid2, bottom: UIColor
+            if ember {
+                // Ember Caves: warm, smoky, lava-glow at the bottom
+                top    = UIColor(red: 0.10, green: 0.06, blue: 0.05, alpha: 1)
+                mid1   = UIColor(red: 0.30, green: 0.10, blue: 0.05, alpha: 1)
+                mid2   = UIColor(red: 0.42, green: 0.18, blue: 0.05, alpha: 1)
+                bottom = UIColor(red: 0.20, green: 0.06, blue: 0.02, alpha: 1)
+            } else {
+                // Mossgate Dusk: deep teal at top, amber glow at horizon
+                top    = UIColor(red: 0.027, green: 0.078, blue: 0.110, alpha: 1)
+                mid1   = UIColor(red: 0.071, green: 0.180, blue: 0.227, alpha: 1)
+                mid2   = UIColor(red: 0.110, green: 0.220, blue: 0.200, alpha: 1)
+                bottom = UIColor(red: 0.110, green: 0.140, blue: 0.110, alpha: 1)
+            }
+            let space = CGColorSpaceCreateDeviceRGB()
+            let colors = [top.cgColor, mid1.cgColor, mid2.cgColor, bottom.cgColor] as CFArray
+            let stops: [CGFloat] = [0, 0.45, 0.75, 1.0]
+            let gradient = CGGradient(colorsSpace: space, colors: colors, locations: stops)!
+            cg.drawLinearGradient(gradient,
+                                  start: CGPoint(x: 0, y: 0),
+                                  end:   CGPoint(x: 0, y: size.height),
+                                  options: [])
+
+            // Stars / embers — deterministic per seed so the same level always
+            // shows the same pattern. Cheap to draw (a few dozen small circles).
+            var rng = SplitMix64(state: seed)
+            for _ in 0..<48 {
+                let x = CGFloat(rng.next() % UInt64(size.width))
+                let y = CGFloat(rng.next() % UInt64(size.height * 3 / 4)) // keep stars in upper sky
+                let r = ember
+                    ? CGFloat(rng.next() % 2) + 1.0   // embers: tiny
+                    : CGFloat(rng.next() % 2) + 0.6   // stars: small
+                let a = ember
+                    ? CGFloat(0.5 + Double(rng.next() % 50) / 100.0)
+                    : CGFloat(0.6 + Double(rng.next() % 40) / 100.0)
+                let color: UIColor = ember
+                    ? UIColor(red: 1.0, green: 0.65, blue: 0.30, alpha: a)
+                    : UIColor(red: 1.0, green: 0.95, blue: 0.78, alpha: a)
+                color.setFill()
+                cg.fillEllipse(in: CGRect(x: x, y: y, width: r, height: r))
+            }
+        }
+        let tex = SKTexture(image: image)
+        tex.filteringMode = .linear
+        return tex
+    }
+
+    /// Builds a soft, glowing moon as a circular radial-gradient sprite.
+    private func makeMoonTexture() -> SKTexture {
+        let size = CGSize(width: 256, height: 256)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let image = renderer.image { ctx in
+            let cg = ctx.cgContext
+            let space = CGColorSpaceCreateDeviceRGB()
+            let inner = UIColor(red: 1.00, green: 0.95, blue: 0.78, alpha: 1.0).cgColor
+            let mid   = UIColor(red: 0.95, green: 0.78, blue: 0.40, alpha: 0.55).cgColor
+            let outer = UIColor(red: 0.95, green: 0.78, blue: 0.40, alpha: 0.0).cgColor
+            let colors = [inner, mid, outer] as CFArray
+            let stops: [CGFloat] = [0, 0.4, 1.0]
+            let gradient = CGGradient(colorsSpace: space, colors: colors, locations: stops)!
+            cg.drawRadialGradient(gradient,
+                                  startCenter: CGPoint(x: size.width/2, y: size.height/2),
+                                  startRadius: 0,
+                                  endCenter:   CGPoint(x: size.width/2, y: size.height/2),
+                                  endRadius:   size.width/2,
+                                  options: [])
+
+            // Crescent shadow to make it look like a real moon
+            cg.setBlendMode(.clear)
+            cg.fillEllipse(in: CGRect(x: size.width * 0.55, y: size.height * 0.18,
+                                      width: size.width * 0.55, height: size.height * 0.55))
+        }
+        let tex = SKTexture(image: image)
+        tex.filteringMode = .linear
+        return tex
+    }
+
+    /// Build and add the sky to the worldNode (scrolls with the camera).
+    /// `worldId == 0` is Mossgate Dusk (teal), `1` is Ember Caves (warm).
+    private func addSky() {
+        // Remove any prior sky so reloading a level doesn't stack them.
+        skyNode?.removeFromParent()
+        let isEmber = (level.world == 1)
+        let bgTex = isEmber ? (emberSkyTexture ?? skyTexture) : skyTexture
+        let tileW = 256.0 * viewScale
+        let tileH = 360.0 * viewScale   // taller than world height so vertical scroll doesn't expose edges
+        let cols = Int(ceil(level.width / 256.0)) + 1
+        let rows = Int(ceil(level.height / tileH * (256.0/360.0))) + 1
+        for col in 0..<cols {
+            for row in 0..<rows {
+                let tile = SKSpriteNode(texture: bgTex)
+                tile.size = CGSize(width: tileW, height: tileH)
+                tile.position = CGPoint(x: (Double(col) + 0.5) * tileW,
+                                        y: (Double(row) + 0.5) * tileH)
+                tile.zPosition = -100
+                worldNode.addChild(tile)
+            }
+        }
+
+        // Moon (only in Mossgate Dusk — Ember Caves doesn't have a moon).
+        if !isEmber, let moon = moonTexture {
+            let moonNode = SKSpriteNode(texture: moon)
+            moonNode.size = CGSize(width: 96 * viewScale, height: 96 * viewScale)
+            moonNode.position = CGPoint(x: 220 * viewScale, y: 120 * viewScale)
+            moonNode.zPosition = -90
+            moonNode.blendMode = .add   // warm glow against the teal sky
+            worldNode.addChild(moonNode)
+        }
     }
 
     // ── Level setup ───────────────────────────────────────────────
@@ -257,9 +387,14 @@ final class MossgateScene: SKScene {
         spikeNodes.removeAll(keepingCapacity: true)
         checkpointNodes.removeAll(keepingCapacity: true)
         worldNode.removeAllChildren()
+        skyNode = nil
         coinsGot = []
         cp = -1
         checkpointSnap = nil
+
+        // Sky must be added FIRST so it sits behind everything else (zPosition
+        // on the tiles is -100, but order of addChild also matters).
+        addSky()
         time = 0
         moverPositions = level.movers.map { CGPoint(x: $0.x, y: $0.y) }
         moverPrev = moverPositions
@@ -644,7 +779,12 @@ final class MossgateScene: SKScene {
         burst(at: CGPoint(x: level.flag.x, y: level.flag.y - 40),
               count: 22, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 120)
         SettingsStore.shared.markCleared(level: levelIndex, coins: coinsGot.count)
-        Achievements.levelCleared(level)
+        let allCoins = coinsGot.count == level.coins.count
+        let totalCoins = SettingsStore.shared.bestCoins.reduce(0, +)
+        Achievements.levelCleared(level,
+                                  coins: coinsGot.count,
+                                  totalCoins: totalCoins,
+                                  allCoinsCollected: allCoins)
         setState(.win)
         notifyPhase()
     }
@@ -832,4 +972,19 @@ private extension Array {
 @inline(__always)
 func clamp<T: Comparable>(_ v: T, _ a: T, _ b: T) -> T {
     return Swift.max(a, Swift.min(b, v))
+}
+
+/// Tiny deterministic PRNG so the star pattern in the sky is identical across
+/// launches of the same level. SplitMix64 — fast, well-distributed, good enough
+/// for visual noise.
+private struct SplitMix64 {
+    private var state: UInt64
+    init(state: UInt64) { self.state = state &+ 0x9E37_79B9_7F4A_7C15 }
+    mutating func next() -> UInt64 {
+        state = state &+ 0x9E37_79B9_7F4A_7C15
+        var z = state
+        z = (z ^ (z &>> 30)) &* 0xBF58_476D_1CE4_E5B9
+        z = (z ^ (z &>> 27)) &* 0x94D0_49BB_1331_11EB
+        return z ^ (z &>> 31)
+    }
 }

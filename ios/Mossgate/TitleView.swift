@@ -164,8 +164,21 @@ struct TitleView: View {
                 .font(.system(size: 11))
                 .tracking(2)
                 .foregroundStyle(Color("MossgateMuted"))
+            Text("v\(AppInfo.shortVersion) (\(AppInfo.build))")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Color("MossgateMuted").opacity(0.7))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 12)
+    }
+}
+
+/// Reads CFBundleShortVersionString / CFBundleVersion from the main bundle.
+enum AppInfo {
+    static var shortVersion: String {
+        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?"
+    }
+    static var build: String {
+        (Bundle.main.infoDictionary?["CFBundleVersion"] as? String) ?? "?"
     }
 }

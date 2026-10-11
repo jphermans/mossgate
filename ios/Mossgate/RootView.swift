@@ -10,6 +10,7 @@ struct RootView: View {
     @State private var phase: Phase = .splash
     @State private var gameLevelIndex: Int = 0
     @State private var hud: MossgateScene.HudInfo = .empty
+    @State private var showSetup = false
     @StateObject private var touch = TouchState()
     @StateObject private var session = GameSession()
 
@@ -31,12 +32,15 @@ struct RootView: View {
                         gameLevelIndex = idx
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
                     },
-                    onOpenSetup: { /* push a sheet? — keep title screen focused */ },
+                    onOpenSetup: { showSetup = true },
                     onOpenGameCenter: {
                         GameCenterManager.shared.openDashboard(presenter: topViewController())
                     }
                 )
                 .transition(.opacity)
+                .sheet(isPresented: $showSetup) {
+                    SetupView(onDone: { showSetup = false })
+                }
 
             case .game:
                 gameStack
