@@ -20,7 +20,7 @@ enum Levels {
                 Solid(x: 2160, y: 512, w: 960, h: 240, oneway: false),
             ],
             movers: [
-                MoverDef(x: 740, y: 512, w: 170, h: 22, axis: "x", distance: 120, period: 3.3, phase: 0),
+                MoverDef(x: 747, y: 512, w: 170, h: 22, axis: "x", distance: 43, period: 3.3, phase: 0),
             ],
             coins: [
                 Coin(x: 180, y: 460), Coin(x: 300, y: 460), Coin(x: 430, y: 440),
@@ -53,7 +53,7 @@ enum Levels {
             ],
             movers: [
                 MoverDef(x: 980, y: 480, w: 170, h: 22, axis: "x", distance: 120, period: 3.4, phase: 0),
-                MoverDef(x: 1320, y: 480, w: 170, h: 22, axis: "x", distance: 140, period: 3.4, phase: .pi),
+                MoverDef(x: 1320, y: 480, w: 170, h: 22, axis: "x", distance: 50, period: 3.4, phase: .pi),
                 MoverDef(x: 1700, y: 390, w: 220, h: 22, axis: "y", distance: 90, period: 4.2, phase: 0),
             ],
             coins: [
@@ -92,8 +92,8 @@ enum Levels {
                 Solid(x: 3040, y: 232, w: 640, h: 28, oneway: true),
             ],
             movers: [
-                MoverDef(x: 1240, y: 768, w: 180, h: 22, axis: "x", distance: 160, period: 3.2, phase: 0),
-                MoverDef(x: 1630, y: 768, w: 180, h: 22, axis: "x", distance: 150, period: 3.2, phase: .pi),
+                MoverDef(x: 1240, y: 768, w: 180, h: 22, axis: "x", distance: 60, period: 3.2, phase: 0),
+                MoverDef(x: 1630, y: 768, w: 180, h: 22, axis: "x", distance: 70, period: 3.2, phase: .pi),
                 MoverDef(x: 2920, y: 324, w: 200, h: 22, axis: "y", distance: 92, period: 3.8, phase: 0.4),
             ],
             coins: [
@@ -134,7 +134,7 @@ enum Levels {
                 Solid(x: 2120, y: 580, w: 760, h: 280, oneway: false),
             ],
             movers: [
-                MoverDef(x: 1500, y: 580, w: 200, h: 22, axis: "x", distance: 140, period: 3.6, phase: 0),
+                MoverDef(x: 1710, y: 580, w: 200, h: 22, axis: "x", distance: 140, period: 3.6, phase: 0),
             ],
             coins: [
                 Coin(x: 160, y: 528), Coin(x: 300, y: 528), Coin(x: 460, y: 528),
@@ -213,8 +213,8 @@ enum Levels {
                 Solid(x: 2980, y: 540, w: 360, h: 28, oneway: true),
             ],
             movers: [
-                MoverDef(x: 1240, y: 720, w: 180, h: 22, axis: "y", distance: 130, period: 3.6, phase: 0),
-                MoverDef(x: 2400, y: 720, w: 180, h: 22, axis: "y", distance: 120, period: 3.6, phase: .pi),
+                MoverDef(x: 1240, y: 714, w: 180, h: 22, axis: "y", distance: 124, period: 3.6, phase: 0),
+                MoverDef(x: 2400, y: 719, w: 180, h: 22, axis: "y", distance: 119, period: 3.6, phase: .pi),
                 MoverDef(x: 2700, y: 540, w: 200, h: 22, axis: "x", distance: 100, period: 3.2, phase: 0.5),
             ],
             coins: [
@@ -258,10 +258,10 @@ enum Levels {
                 Solid(x: 3380, y: 460, w: 300, h: 28, oneway: true),
             ],
             movers: [
-                MoverDef(x: 1320, y: 940, w: 200, h: 22, axis: "x", distance: 130, period: 3.4, phase: 0),
-                MoverDef(x: 1720, y: 800, w: 200, h: 22, axis: "y", distance: 140, period: 3.8, phase: .pi / 3),
-                MoverDef(x: 2540, y: 940, w: 200, h: 22, axis: "x", distance: 140, period: 3.4, phase: .pi),
-                MoverDef(x: 2940, y: 800, w: 200, h: 22, axis: "y", distance: 120, period: 3.6, phase: 0.6),
+                MoverDef(x: 1860, y: 940, w: 200, h: 22, axis: "x", distance: 130, period: 3.4, phase: 0),
+                MoverDef(x: 1720, y: 789, w: 200, h: 22, axis: "y", distance: 129, period: 3.8, phase: .pi / 3),
+                MoverDef(x: 3110, y: 940, w: 200, h: 22, axis: "x", distance: 140, period: 3.4, phase: .pi),
+                MoverDef(x: 2940, y: 799, w: 200, h: 22, axis: "y", distance: 119, period: 3.6, phase: 0.6),
             ],
             coins: [
                 Coin(x: 180, y: 888), Coin(x: 540, y: 748), Coin(x: 780, y: 608),

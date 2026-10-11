@@ -453,8 +453,65 @@ final class MossgateScene: SKScene {
 
     func startLevel(_ index: Int) {
         loadLevel(index: index, toState: .play)
+        runMoverTestIfRequested()
+        runPlaceAtHookIfRequested()
         runDropTestHookIfRequested()
         runSfxTestHookIfRequested()
+    }
+
+    /// Test hook: `-PlaceAt x,y` teleports the player, so a screenshot can be
+    /// taken anywhere in a level. Used to photograph moving platforms, which
+    /// are otherwise often just off the edge of the camera's view.
+    private func runPlaceAtHookIfRequested() {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: "-PlaceAt"), i + 1 < args.count else { return }
+        let parts = args[i + 1].split(separator: ",").compactMap { Double($0) }
+        guard parts.count == 2 else { return }
+        playerX = CGFloat(parts[0])
+        playerY = CGFloat(parts[1])
+        playerVx = 0
+        playerVy = 0
+    }
+
+    /// Test hook: `-TestMovers 1` walks every level's movers across a full
+    /// period using the same curve `placeMovers()` applies, and reports any
+    /// rect that intersects the land or another mover. This validates the level
+    /// data through the engine's own maths rather than a reimplementation of it.
+    private func runMoverTestIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestMovers") else { return }
+        var totalLand = 0, totalPair = 0
+        for (li, lv) in Levels.all.enumerated() {
+            var land = 0, pair = 0
+            let steps = 600
+            for s in 0...steps {
+                let t = CGFloat(s) / CGFloat(steps) * 24.0     // ~16 periods of a 3.4 s mover
+                let rects = lv.movers.map { m -> CGRect in
+                    let k = sin((t / m.period) * 2 * .pi + m.phase)
+                    return CGRect(x: m.axis == "x" ? m.x + k * m.distance : m.x,
+                                  y: m.axis == "y" ? m.y + k * m.distance : m.y,
+                                  width: m.w, height: m.h)
+                }
+                // Inset so merely touching an edge is not counted as a collision,
+                // matching the margin the level data was tuned against.
+                for r in rects.map({ $0.insetBy(dx: 0.5, dy: 0.5) }) {
+                    for sol in lv.solids where !sol.oneway {
+                        let sr = CGRect(x: sol.x, y: sol.y, width: sol.w, height: sol.h)
+                                  .insetBy(dx: -0.5, dy: -0.5)
+                        if r.intersects(sr) { land += 1; break }
+                    }
+                }
+                for i in rects.indices {
+                    for j in rects.indices where j > i {
+                        if rects[i].insetBy(dx: 1, dy: 1).intersects(rects[j]) { pair += 1 }
+                    }
+                }
+            }
+            totalLand += land; totalPair += pair
+            print("[Mossgate:MOVERS] level \(li) \"\(lv.name)\" movers=\(lv.movers.count) "
+                  + "landOverlaps=\(land) moverOverlaps=\(pair)")
+        }
+        print("[Mossgate:MOVERS] TOTAL land=\(totalLand) moverOverlaps=\(totalPair) "
+              + "(0/0 means every mover stays in its gap for its whole travel)")
     }
 
     /// Test hook: `-TestSfx 1` fires every sound effect in turn and logs the

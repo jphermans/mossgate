@@ -259,50 +259,111 @@ final class AudioEngine {
 
     private enum WaveformType { case sine, square, triangle, sawtooth }
 
+    /// How many harmonics still fit below Nyquist for `f`. Partials past this
+    /// point fold back down as inharmonic tones — the harsh metallic buzz the
+    /// old naive `sin(phase) > 0 ? 1 : -1` square produced.
+    private static func harmonicLimit(_ f: Double) -> Int {
+        max(1, min(24, Int(20_000.0 / max(abs(f), 1.0))))
+    }
+
     private func tone(freqFrom: Double, freqTo: Double, dur: Double,
                      type: WaveformType, vol: Double, delay: Double = 0) {
         guard settings.sfxOn else { return }
         let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
-        let frameTotal = AVAudioFrameCount(dur * format.sampleRate + delay * format.sampleRate)
+        let sr = format.sampleRate
+        let frameTotal = AVAudioFrameCount((dur + delay) * sr)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameTotal) else { return }
         buffer.frameLength = frameTotal
 
         let data = buffer.floatChannelData![0]
-        let startSample = Int(delay * format.sampleRate)
-        let durSamples = Int(dur * format.sampleRate)
-        let sampleRate = Float(format.sampleRate)
+        for i in 0..<Int(frameTotal) { data[i] = 0 }
+
+        let startSample = Int(delay * sr)
+        let durSamples = Int(dur * sr)
+        guard durSamples > 0 else { return }
+
+        let harmonics = Self.harmonicLimit(max(abs(freqFrom), abs(freqTo)))
+        let attack = min(0.004 * sr, Double(durSamples) * 0.3)   // 4 ms, never the whole note
+
+        var raw = [Float](repeating: 0, count: durSamples)
+        var phase = 0.0
+        var peak: Float = 0.0001
         for i in 0..<durSamples {
-            let t = Float(i) / sampleRate
-            let progress = Float(i) / Float(durSamples)
-            let freq = Float(freqFrom) + (Float(freqTo) - Float(freqFrom)) * progress
-            let phase = 2.0 * .pi * freq * t
-            let raw: Float
-            switch type {
-            case .sine:     raw = sin(phase)
-            case .square:   raw = sin(phase) > 0 ? 1 : -1
-            case .triangle: raw = (2.0 / .pi) * asin(sin(phase))
-            case .sawtooth: raw = 2.0 * (t * freq - floor(0.5 + t * freq))
+            let progress = Double(i) / Double(durSamples)
+            let freq = freqFrom + (freqTo - freqFrom) * progress
+
+            // Additive up to Nyquist, so no partial can alias. Triangle and
+            // saw use the standard alternating signs.
+            var s = 0.0
+            for k in 1...harmonics {
+                if type == .square && k % 2 == 0 { continue }
+                let a: Double
+                switch type {
+                case .sine:     a = (k == 1) ? 1 : 0
+                case .square:   a = 1.0 / Double(k)
+                case .triangle: a = 1.0 / Double(k * k) * (k % 4 == 1 ? 1 : -1)
+                case .sawtooth: a = 1.0 / Double(k) * (k % 2 == 1 ? 1 : -1)
+                }
+                if a != 0 { s += a * sin(Double(k) * phase) }
             }
-            let env = Float(vol) * (1.0 - progress)
-            data[startSample + i] = raw * env
+
+            // Attack then decay to silence: the old `(1 - progress)` started at
+            // full amplitude, which is a step discontinuity — an audible click.
+            let env: Double
+            if Double(i) < attack {
+                env = Double(i) / attack
+            } else {
+                env = 1.0 - (Double(i) - attack) / max(1.0, Double(durSamples) - attack)
+            }
+            let v = Float(s * env)
+            raw[i] = v
+            peak = max(peak, abs(v))
+
+            // Integrate the frequency. `2π · freq · t` is only correct for a
+            // constant pitch; on a sweep its derivative is freq + t·df/dt, which
+            // made the jump/coin/die glides warble.
+            phase += 2.0 * .pi * freq / sr
+            if phase > 2.0 * .pi { phase -= 2.0 * .pi * (phase / (2.0 * .pi)).rounded(.down) }
         }
-        // Schedule on the SFX mixer (off the main thread, see scheduleSFX).
+
+        // Normalise so each effect peaks at exactly `vol` whichever waveform it
+        // uses — consistent loudness across the whole set.
+        let gain = Float(vol) / peak
+        for i in 0..<durSamples { data[startSample + i] = raw[i] * gain }
         scheduleSFX(buffer)
     }
 
     private func noise(dur: Double, vol: Double, cutoff: Double) {
         guard settings.sfxOn else { return }
         let format = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 1)!
-        let frameTotal = AVAudioFrameCount(dur * format.sampleRate)
+        let sr = format.sampleRate
+        let frameTotal = AVAudioFrameCount(dur * sr)
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameTotal) else { return }
         buffer.frameLength = frameTotal
 
         let data = buffer.floatChannelData![0]
         let n = Int(frameTotal)
+        guard n > 0 else { return }
+
+        // `cutoff` used to be accepted and then ignored, so every landing and
+        // death was a full-bandwidth white-noise burst — the hiss. Two cascaded
+        // one-pole low passes give a soft thud instead of interference.
+        let rc = 1.0 / (2.0 * Double.pi * max(cutoff, 1))
+        let alpha = (1.0 / sr) / (rc + 1.0 / sr)
+
+        var raw = [Float](repeating: 0, count: n)
+        var y1 = 0.0, y2 = 0.0
+        var peak: Float = 0.0001
         for i in 0..<n {
-            let env = Float(vol) * Float(1.0 - Double(i) / Double(n))
-            data[i] = Float.random(in: -1...1) * env
+            y1 += alpha * (Double.random(in: -1...1) - y1)
+            y2 += alpha * (y1 - y2)
+            let env = 1.0 - Double(i) / Double(n)
+            let v = Float(y2 * env)
+            raw[i] = v
+            peak = max(peak, abs(v))
         }
+        let gain = Float(vol) / peak
+        for i in 0..<n { data[i] = raw[i] * gain }
         scheduleSFX(buffer)
     }
 }

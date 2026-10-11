@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """Generate Mossgate's looping background music.
 
-Writes two seamless-loop stereo WAVs into ios/Mossgate/Resources/Music/:
+Writes two seamlessly looping stereo tracks into ios/Mossgate/Resources/Music/
+as AAC (.m4a), encoded with the system afconvert:
 
-    dusk.wav    Mossgate Dusk — calm, mysterious, music-box over a deep drone
-    ember.wav   Ember Caves  — warmer and more ominous, heartbeat pulse
+    dusk     Mossgate Dusk — calm, mysterious, music-box over a soft drone
+    ember    Ember Caves  — warmer and more ominous, heartbeat pulse
 
-Both are additive synthesis (no filters, so no aliasing) and are rendered
-longer than their loop length, with the overflow wrapped back onto the head,
-which makes the loop point mathematically seamless.
+Loop seamlessness is structural rather than a crossfade: notes are mixed in
+with `place()`, which wraps anything crossing the end back onto the head, and
+sustained partials are snapped to a whole number of cycles per loop.
+
+Every pitch sits in the range an iPhone speaker actually reproduces. An earlier
+version put ~88% of its energy below 60 Hz, which is inaudible on a phone but
+still drives the cone into distortion — heard as a rattle.
 
     ./scripts/make-music.py            # regenerate both tracks
     ./scripts/make-music.py --preview  # also print a level report
@@ -94,37 +99,61 @@ def voice_pad(freqs: list[float], dur: float, amp: float,
     for f in freqs:
         out += np.sin(2 * np.pi * f * t)
         out += 0.85 * np.sin(2 * np.pi * (f * 1.0035) * t)          # slow beating
-        out += 0.12 * np.sin(2 * np.pi * f * 2 * t)
-    out /= max(1, len(freqs) * 2)
+        out += 0.32 * np.sin(2 * np.pi * f * 2 * t)                 # octave up: phone speakers
+    out /= max(1, len(freqs) * 2)                                   # are deaf below ~300 Hz
     return out * env_pad(n, attack, release) * amp
 
 
+def snap(freq: float, dur: float) -> float:
+    """Nearest frequency completing a whole number of cycles in `dur`.
+
+    A sustained tone whose period does not divide the loop length steps at the
+    seam — one audible click per repeat. Transients (plucks, pads) are safe
+    because their envelopes reach zero, but the drone plays continuously and so
+    every one of its partials has to land back on phase.
+    """
+    return round(freq * dur) / dur
+
+
 def voice_drone(freq: float, dur: float, amp: float) -> np.ndarray:
-    """Deep bed with a very slow amplitude LFO so it breathes."""
+    """Deep bed with a very slow amplitude LFO so it breathes. Every partial is
+    snapped to a whole number of cycles over the loop, so the seam is silent."""
     n = int(dur * SR)
     t = np.arange(n) / SR
-    out = np.sin(2 * np.pi * freq * t)
-    out += 0.7 * np.sin(2 * np.pi * (freq * 1.002) * t)
-    out += 0.35 * np.sin(2 * np.pi * freq * 2 * t)
-    out += 0.15 * np.sin(2 * np.pi * freq * 3 * t)
-    lfo = 0.85 + 0.15 * np.sin(2 * np.pi * 0.055 * t)
+    f = snap(freq, dur)
+    out = np.sin(2 * np.pi * f * t)
+    out += 0.7 * np.sin(2 * np.pi * snap(freq * 1.002, dur) * t)      # slow beating
+    out += 0.45 * np.sin(2 * np.pi * snap(freq * 2, dur) * t)
+    out += 0.28 * np.sin(2 * np.pi * snap(freq * 3, dur) * t)
+    lfo = 0.85 + 0.15 * np.sin(2 * np.pi * snap(0.055, dur) * t)
     return out * lfo * amp
 
 
-def voice_noise(dur: float, amp: float, smooth: int = 900, seed: int = 7) -> np.ndarray:
-    """Smoothed noise — a soft cave rumble. Moving average is plenty here."""
+def voice_noise(dur: float, amp: float, low: float = 260, high: float = 1500,
+                seed: int = 7) -> np.ndarray:
+    """Band-limited hiss — cave air.
+
+    This was a 1400-sample moving average, i.e. a low pass at roughly 14 Hz:
+    energy at a frequency no phone speaker can move, which only shoved the
+    driver in and out and rattled. It now sits in a band the speaker actually
+    reproduces. Band limiting is done circularly so the loop seam is intact.
+    """
     rng = np.random.default_rng(seed)
     n = int(dur * SR)
-    x = rng.standard_normal(n)
-    k = np.ones(smooth) / smooth
-    return np.convolve(x, k, mode="same") * amp
+    X = np.fft.rfft(rng.standard_normal(n))
+    f = np.fft.rfftfreq(n, 1.0 / SR)
+    X *= (f >= low) & (f <= high)
+    x = np.fft.irfft(X, n=n)
+    x /= np.sqrt(np.mean(x ** 2)) or 1.0        # unit RMS, so `amp` means something
+    return x * amp
 
 
 def voice_heart(dur: float, amp: float) -> np.ndarray:
-    """Muffled low thump for the Ember pulse."""
+    """Muffled thump for the Ember pulse. Starts at 118 Hz, not 58 Hz, so the
+    hit is audible on a phone speaker instead of just moving the cone."""
     n = int(dur * SR)
     t = np.arange(n) / SR
-    f = 58 * np.exp(-6 * t)                       # pitch drop
+    f = 118 * np.exp(-6 * t)                      # pitch drop
     out = np.sin(2 * np.pi * np.cumsum(f) / SR)
     return out * env_pluck(n, attack=0.008, curve=9.0) * amp
 
@@ -145,7 +174,31 @@ def place(buf: np.ndarray, x: np.ndarray, at: float, pan: float = 0.0) -> None:
     buf[idx, 1] += x * right
 
 
+def highpass(buf: np.ndarray, cutoff: float, order: int = 4) -> np.ndarray:
+    """Zero-phase high pass, applied circularly so the loop stays seamless.
+
+    An ordinary IIR filter would smear the loop point and put a step at the
+    seam; filtering in the frequency domain is inherently periodic and leaves
+    the loop continuous.
+    """
+    n = buf.shape[0]
+    F = np.fft.rfft(buf, axis=0)
+    f = np.fft.rfftfreq(n, 1.0 / SR)
+    H = 1.0 / np.sqrt(1.0 + (cutoff / np.maximum(f, 1e-9)) ** (2 * order))
+    return np.fft.irfft(F * H[:, None], n=n, axis=0)
+
+
+def soft_limit(buf: np.ndarray, ceiling: float = 0.85) -> np.ndarray:
+    """tanh knee, so overshoots round off rather than clip."""
+    return np.tanh(buf / ceiling) * ceiling
+
+
 def write_wav(path: Path, buf: np.ndarray, peak: float = 0.72) -> None:
+    # Strip what an iPhone speaker cannot reproduce *before* normalising. The
+    # first render put ~88% of its energy below 60 Hz: inaudible, but it drives
+    # the cone into distortion, which is heard as buzz and crackle.
+    buf = highpass(buf, 95.0, order=4)
+    buf = soft_limit(buf, 0.85)
     m = float(np.max(np.abs(buf))) or 1.0
     data = np.clip(buf / m * peak, -1.0, 1.0)
     ints = (data * 32767.0).astype("<i2")
@@ -167,9 +220,11 @@ def make_dusk() -> np.ndarray:
     n = int(length * SR)
     buf = np.zeros((n, 2))
 
-    # Deep bed — always present, exactly the loop length
-    place(buf, voice_drone(NOTE["A1"], length, 0.30), 0.0)
-    place(buf, voice_drone(NOTE["A2"] * 0.5, length, 0.10), 0.0)
+    # Deep bed — always present, exactly the loop length. An octave up from the
+    # original A1 (55 Hz): that sits in the phone speaker's dead zone and only
+    # rattled the driver, so the drone is now audible rather than felt.
+    place(buf, voice_drone(NOTE["A2"], length, 0.17), 0.0)
+    place(buf, voice_drone(NOTE["E3"], length, 0.05), 0.0)
 
     # Pad progression: Am — Fmaj7 — Cmaj — Gsus4  (2 bars each)
     prog = [
@@ -181,21 +236,22 @@ def make_dusk() -> np.ndarray:
     for i, chord in enumerate(prog):
         at = i * 2 * 4 * beat
         dur = 2 * 4 * beat
-        place(buf, voice_pad(chord, dur, 0.16, attack=1.4, release=1.8), at, pan=-0.12)
+        place(buf, voice_pad(chord, dur, 0.21, attack=1.4, release=1.8), at, pan=-0.12)
 
     # Music-box melody — sparse, A minor pentatonic, deterministic
+    # (octave up from the drone so it sits where a phone speaker is sensitive)
     mel = ["A4", "C5", "E5", "D5", "C5", "A4", "G4", "A4",
            "C5", "D5", "C5", "A4", "G4", "E4", "G4", "A4"]
     for i, name in enumerate(mel):
         at = i * 2 * beat + (beat * 0.5 if i % 4 == 2 else 0.0)
-        amp = 0.30 if i % 2 == 0 else 0.22
+        amp = 0.44 if i % 2 == 0 else 0.33
         place(buf, voice_pluck(NOTE[name], 1.9, amp, bright=0.4),
               at, pan=0.22 if i % 2 else -0.10)
 
     # Distant high bells on the half-bar
     for i in range(bars):
         if i % 2 == 1:
-            place(buf, voice_pluck(NOTE["A5"], 3.2, 0.11, bright=0.6, detune=0.7),
+            place(buf, voice_pluck(NOTE["A5"], 3.2, 0.16, bright=0.6, detune=0.7),
                   i * 4 * beat + beat * 1.5, pan=0.4)
     return buf
 
@@ -209,10 +265,10 @@ def make_ember() -> np.ndarray:
     n = int(length * SR)
     buf = np.zeros((n, 2))
 
-    # Low bed + cave rumble
-    place(buf, voice_drone(NOTE["D2"], length, 0.32), 0.0)
-    place(buf, voice_drone(NOTE["A2"] * 0.5, length, 0.11), 0.0)
-    place(buf, voice_noise(length, 0.05, smooth=1400, seed=11), 0.0, pan=0.1)
+    # Low bed + cave air (frequencies the speaker can actually reproduce)
+    place(buf, voice_drone(NOTE["D3"], length, 0.17), 0.0)
+    place(buf, voice_drone(NOTE["A3"], length, 0.05), 0.0)
+    place(buf, voice_noise(length, 0.020, seed=11), 0.0, pan=0.1)
 
     # Warmer, tenser progression: Dm — Bb — Gm — A
     prog = [
@@ -224,27 +280,27 @@ def make_ember() -> np.ndarray:
     for i, chord in enumerate(prog):
         at = i * 2 * 4 * beat
         dur = 2 * 4 * beat
-        place(buf, voice_pad(chord, dur, 0.19, attack=1.0, release=1.4), at, pan=0.10)
+        place(buf, voice_pad(chord, dur, 0.24, attack=1.0, release=1.4), at, pan=0.10)
 
     # Heartbeat: soft thump on beats 1 and 3 of each bar
     for b in range(bars):
         base = b * 4 * beat
-        place(buf, voice_heart(0.45, 0.30), base, pan=-0.05)
-        place(buf, voice_heart(0.40, 0.20), base + 2 * beat, pan=-0.05)
+        place(buf, voice_heart(0.45, 0.34), base, pan=-0.05)
+        place(buf, voice_heart(0.40, 0.23), base + 2 * beat, pan=-0.05)
 
     # Low marimba motif — D minor, sparse
     motif = ["D4", "F4", "A4", "G4", "F4", "D4", "C4", "D4",
              "F4", "A4", "Bb4", "A4", "G4", "F4", "E4", "D4"]
     for i, name in enumerate(motif):
         at = i * 2 * beat
-        amp = 0.26 if i % 4 == 0 else 0.18
-        place(buf, voice_pluck(NOTE[name] * 0.5, 1.6, amp, bright=0.5),
+        amp = 0.40 if i % 4 == 0 else 0.29
+        place(buf, voice_pluck(NOTE[name], 1.6, amp, bright=0.5),
               at, pan=0.26 if i % 2 else -0.16)
 
     # Airy high accents, like shifting embers
     for i in range(bars):
         if i % 3 == 2:
-            place(buf, voice_pluck(NOTE["D6"], 2.6, 0.10, bright=0.7, detune=1.1),
+            place(buf, voice_pluck(NOTE["D6"], 2.6, 0.16, bright=0.7, detune=1.1),
                   i * 4 * beat + beat * 2.5, pan=0.45)
     return buf
 

@@ -20,8 +20,8 @@ settings:
     #   ./scripts/bump-ios-version.py --patch    # 0.1.0 -> 0.1.1  (bugfix batch)
     #   ./scripts/bump-ios-version.py --minor    # 0.1.0 -> 0.2.0  (new features)
     # The script rewrites these two lines and re-runs xcodegen.
-    MARKETING_VERSION: "0.2.0"
-    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "0.2.1"
+    CURRENT_PROJECT_VERSION: "4"
     SWIFT_STRICT_CONCURRENCY: minimal
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
@@ -34,6 +34,7 @@ settings:
     INFOPLIST_KEY_UILaunchScreen_ImageName: "LaunchLantern"
     INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
     INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+    INFOPLIST_KEY_UIRequiresFullScreen: "YES"
     INFOPLIST_KEY_CFBundleDisplayName: "Mossgate"
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.games"
     INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance: YES
