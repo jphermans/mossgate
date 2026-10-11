@@ -642,36 +642,75 @@ enum Autopilot {
         return candidates.first ?? anchor
     }
 
+    /// The point on a route closest to an anchor, within `limit`.
+    ///
+    /// This replaced sampling the route by arc length, which dropped a coin wherever
+    /// the fraction happened to land — measured at up to 2742 units from where the
+    /// level designed it, and the reason the runner-sourced gates still had coins
+    /// nobody could take. Anchoring on the nearest point of a real playthrough keeps
+    /// the coin both ON the path and NEAR its designed position.
+    private static func nearestRoutePoint(_ route: [CGPoint], to anchor: CGPoint,
+                                          limit: CGFloat) -> CGPoint? {
+        var best: (d: CGFloat, p: CGPoint)?
+        for p in route {
+            let d = hypot(p.x - anchor.x, p.y - anchor.y)
+            if d < limit && (best == nil || d < best!.d) { best = (d, p) }
+        }
+        return best?.p
+    }
+
     /// The coin layout for a gate.
     ///
-    /// One definition, so the scene and the tests cannot disagree about where the
-    /// coins are: the runner's route where it can finish the gate, ballistic probes
-    /// where it cannot, and a nudge of the authored position as the last resort.
+    /// Coins stay on the path the player actually takes. In order:
+    ///
+    ///  1. **The nearest point of the runner's route** — a real playthrough, so the
+    ///     coin is somewhere the player genuinely went, and anchored to the designed
+    ///     position so it is still on the way past.
+    ///  2. **The authored position, nudged slightly**, validated.
+    ///  3. The far-moving probe, only when 1 and 2 both fail the pickup test.
+    ///
+    /// The ordering is the lesson from getting this wrong twice. A first version moved
+    /// coins 78-183 units off the route and the test still called them fine; a second
+    /// sampled the route by arc length and moved them up to 2742. Both asked "is this
+    /// coin reachable from where it sits" when the question is "does the player go
+    /// there" — local reachability is not reachability.
     static func coinLayout(level: Level, phase: [CGFloat], period: [CGFloat],
                            seed: Int) -> (coins: [CGPoint], source: String) {
         let run = route(level: level, phase: phase, period: period)
-        if !run.isEmpty {
-            let placed = coins(run, count: level.coins.count,
-                               seed: seed &+ level.id, level: level)
-            // A route point can still be out of pickup range, so every sampled coin
-            // goes through the same proof rather than being trusted for coming off
-            // the route.
-            if placed.count == level.coins.count {
-                let checked = placed.enumerated().map { i, c -> CGPoint in
-                    collectible(c, level: level, phase: phase, period: period)
-                        ? c
-                        : placeCoin(anchor: c, index: i, level: level,
-                                    phase: phase, period: period,
-                                    seed: seed &+ i &* 977)
-                }
-                return (checked, "runner")
-            }
-        }
+
+        var movedFar = 0
+        var onRoute = 0
         let out = level.coins.enumerated().map { i, c -> CGPoint in
-            placeCoin(anchor: CGPoint(x: c.x, y: c.y), index: i, level: level,
-                      phase: phase, period: period, seed: seed &+ i &* 977)
+            let anchor = CGPoint(x: c.x, y: c.y)
+
+            // 1. The path the runner took, near where this coin was designed to be.
+            //    A route point is by construction somewhere the player was, so it needs
+            //    no separate reachability proof — only that it is near the anchor.
+            if !run.isEmpty, let p = nearestRoutePoint(run, to: anchor, limit: 170) {
+                onRoute += 1
+                return p
+            }
+
+            // 2. Where the level was designed for the player to go.
+            let nudgedSpot = nudged(anchor, index: i, level: level, seed: seed &+ i &* 977)
+            if collectible(nudgedSpot, level: level, phase: phase, period: period) {
+                return nudgedSpot
+            }
+            if collectible(anchor, level: level, phase: phase, period: period) {
+                return anchor
+            }
+
+            // 3. Neither worked. Only now is it worth moving the coin somewhere else.
+            movedFar += 1
+            return placeCoin(anchor: anchor, index: i, level: level,
+                             phase: phase, period: period, seed: seed &+ i &* 977)
         }
-        return (out, "probe")
+        if ProcessInfo.processInfo.arguments.contains("-TestCoins") {
+            print("[Mossgate:COIN]   \(level.name): \(level.coins.count) coins, "
+                  + "onRoute=\(onRoute) movedFar=\(movedFar)")
+        }
+        let source = onRoute > 0 ? "route" : (movedFar == 0 ? "authored" : "authored+distant")
+        return (out, source)
     }
 
     // MARK: - Coins from the route

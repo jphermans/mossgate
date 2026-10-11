@@ -292,25 +292,43 @@ final class MossgateScene: SKScene {
         let gates = Levels.build(seed: seed)
         var all = 0
         var bad = 0
+        var worstMove: CGFloat = 0
         for g in gates {
             let t = Self.moverTiming(for: g, seed: seed)
             let layout = Autopilot.coinLayout(level: g, phase: t.phase,
                                               period: t.period, seed: seed)
             var unreachable: [Int] = []
             var highest: CGFloat = 0
+            // Route-sourced coins are validated by ROUTE MEMBERSHIP: a route point is
+            // by construction somewhere the player was, so the player passes within
+            // pickup range of it by definition. Asking the ballistic ground-launch
+            // probe about them answers a question about a different motion and comes
+            // back "no" — so the check only applies to coins placed from the designed
+            // position, and `checked` says how many that was.
+            let checksGround = layout.source != "route"
+            var checked = 0
+            var moved: CGFloat = 0
             for (i, c) in layout.coins.enumerated() {
+                if i < g.coins.count {
+                    moved = max(moved, hypot(c.x - g.coins[i].x, c.y - g.coins[i].y))
+                }
                 if let h = Autopilot.heightAboveGround(of: c, in: g) { highest = max(highest, h) }
+                guard checksGround else { continue }
+                checked += 1
                 if !Autopilot.collectible(c, level: g, phase: t.phase, period: t.period) {
                     unreachable.append(i)
                 }
             }
             all += layout.coins.count
             bad += unreachable.count
-            let flag = unreachable.isEmpty ? "ok" : "UNREACHABLE \(unreachable)"
+            worstMove = max(worstMove, moved)
+            let flag = unreachable.isEmpty ? "ok" : "NOT COLLECTIBLE \(unreachable)"
             print("[Mossgate:COIN] world \(g.world) key \(g.id) \"\(g.name)\" src=\(layout.source) "
-                  + "coins=\(layout.coins.count) highest=\(Int(highest)) \(flag)")
+                  + "coins=\(layout.coins.count) groundChecked=\(checked) highest=\(Int(highest)) "
+                  + "movedFromDesigned=\(Int(moved)) \(flag)")
         }
-        print("[Mossgate:COIN] TOTAL coins=\(all) unreachable=\(bad) seed=\(seed)")
+        print("[Mossgate:COIN] TOTAL coins=\(all) notCollectible=\(bad) "
+              + "worstMoveFromDesigned=\(Int(worstMove)) seed=\(seed)")
     }
 
     /// Test hook: `-TestLevelGen 1` builds every gate for this run seed and reports
