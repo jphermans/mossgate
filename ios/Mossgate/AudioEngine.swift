@@ -29,9 +29,15 @@ final class AudioEngine {
         engine.attach(sfxNode)
         engine.attach(sfxMixer)
         engine.attach(ambientMixer)
-        engine.connect(sfxNode, to: sfxMixer, format: nil)
-        engine.connect(sfxMixer, to: engine.mainMixerNode, format: nil)
-        engine.connect(ambientMixer, to: engine.mainMixerNode, format: nil)
+        // Connect the sfxNode with an explicit mono 44.1 kHz format. Without
+        // this, the node defaults to the engine's mainMixer output (stereo),
+        // and `scheduleBuffer` fails at runtime with
+        // "_outputFormat.channelCount == buffer.format.channelCount" because
+        // the SFX buffers are mono (see `tone()`).
+        let sfxFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1)!
+        engine.connect(sfxNode, to: sfxMixer, format: sfxFormat)
+        engine.connect(sfxMixer, to: engine.mainMixerNode, format: sfxFormat)
+        engine.connect(ambientMixer, to: engine.mainMixerNode, format: sfxFormat)
 
         configureSession()
         applyVolumes()
