@@ -42,18 +42,40 @@ final class GameCenterManager: NSObject, ObservableObject {
     }
 
     /// Trigger the system Game Center sign-in flow. Idempotent — if the player
-    /// is already signed in, the system just hands back the existing player.
+    /// is already signed in, the handler fires immediately with a nil view
+    /// controller.
     func authenticate() {
-        GKLocalPlayer.local.authenticateHandler = { [weak self] gc, error in
+        GKLocalPlayer.local.authenticateHandler = { [weak self] signInVC, error in
             guard let self else { return }
             Task { @MainActor in
-                self.isAuthenticated = (gc != nil)
+                // NOTE: the first parameter is the view controller Game Center
+                // wants us to present for sign-in — it is nil when the player is
+                // already authenticated. It is NOT the player, so casting it to
+                // GKLocalPlayer always fails and reading `gc != nil` gave the
+                // answer backwards (true only while the sign-in prompt showed).
+                // Read the state off GKLocalPlayer.local instead.
+                let player = GKLocalPlayer.local
+                self.isAuthenticated = player.isAuthenticated
+                self.displayName = player.isAuthenticated ? player.displayName : ""
                 self.lastError = error?.localizedDescription
-                if let player = gc as? GKLocalPlayer {
-                    self.displayName = player.displayName
+                if let signInVC {
+                    Self.present(signInVC)
                 }
             }
         }
+    }
+
+    /// Presents a UIKit controller (Game Center's own sign-in sheet) on the
+    /// top-most controller of the foreground window.
+    private static func present(_ vc: UIViewController) {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first,
+              let window = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first,
+              let root = window.rootViewController
+        else { return }
+        var top = root
+        while let presented = top.presentedViewController { top = presented }
+        top.present(vc, animated: true)
     }
 
     /// Report an achievement (e.g. "Cleared all of World 1").
@@ -70,21 +92,24 @@ final class GameCenterManager: NSObject, ObservableObject {
 
     /// Submit a coin score for a single level.
     func submitLevelScore(level: Int, coins: Int) {
-        guard isAuthenticated else { return }
-        let score = GKScore(leaderboardIdentifier: ID.levelLeaderboard(level))
-        score.value = Int64(coins)
-        GKScore.report([score]) { error in
-            if let error { print("[GameCenter] score \(level): \(error)") }
-        }
+        submit(coins, to: ID.levelLeaderboard(level), label: "level \(level)")
     }
 
     /// Submit the global "total coins across all cleared levels" score.
     func submitTotalScore(_ totalCoins: Int) {
+        submit(totalCoins, to: ID.totalCoinsLeaderboard, label: "total")
+    }
+
+    /// Reports a score. Uses `GKLeaderboard.submitScore` — `GKScore` and
+    /// `GKScore.report` were deprecated in iOS 14. Silently no-ops when the
+    /// player isn't signed in.
+    private func submit(_ value: Int, to leaderboardID: String, label: String) {
         guard isAuthenticated else { return }
-        let score = GKScore(leaderboardIdentifier: ID.totalCoinsLeaderboard)
-        score.value = Int64(totalCoins)
-        GKScore.report([score]) { error in
-            if let error { print("[GameCenter] total score: \(error)") }
+        GKLeaderboard.submitScore(value,
+                                  context: 0,
+                                  player: GKLocalPlayer.local,
+                                  leaderboardIDs: [leaderboardID]) { error in
+            if let error { print("[GameCenter] score \(label): \(error)") }
         }
     }
 
