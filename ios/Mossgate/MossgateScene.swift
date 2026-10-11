@@ -142,6 +142,12 @@ final class MossgateScene: SKScene {
         anchorPoint = CGPoint(x: 0, y: 1)
         // No SKCameraNode — the worldNode translation IS the camera.
         camera = nil
+        // Flip the worldNode vertically so the world's y axis matches the
+        // top-down canvas convention used in the original HTML/JS engine.
+        // With yScale = -1, a node at world (x, y) appears at scene (x*scale, -y*scale).
+        // Combined with anchorPoint (0, 1) at view top-left, world y=0 ends up
+        // at the top of the view, and y grows downward as expected.
+        worldNode.yScale = -1
         // addChild is idempotent — re-attach safely if SwiftUI re-presents this scene.
         if worldNode.parent !== self { addChild(worldNode) }
         if particleLayer.parent !== self { addChild(particleLayer) }
@@ -695,8 +701,13 @@ final class MossgateScene: SKScene {
         let shake = trauma * trauma
         let shakeX = (sin(time * 47) * 0.5 + sin(time * 23) * 0.5) * 10 * shake
         let shakeY = (cos(time * 41) * 0.5 + sin(time * 19) * 0.5) * 7 * shake
+        // With yScale = -1 on the worldNode, the y translation is inverted too.
+        // A child at local (x, y) lands at scene (x*scale + tx, -y*scale + ty).
+        // We want world (camX, camY) to appear at scene (0, 0) (view top-left),
+        // so ty = camY * viewScale, and the y-flip makes the world y=0 land at
+        // the top of the view as expected from a top-down canvas convention.
         worldNode.position = CGPoint(x: -camX * viewScale + shakeX,
-                                     y: -camY * viewScale + shakeY)
+                                     y: camY * viewScale + shakeY)
         // DEBUG
         if Int(time * 4) != lastDebugFrame {
             lastDebugFrame = Int(time * 4)
