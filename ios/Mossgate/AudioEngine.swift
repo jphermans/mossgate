@@ -210,38 +210,172 @@ final class AudioEngine {
             if !self.engine.isRunning {
                 Thread.sleep(forTimeInterval: 0.05)
             }
+            // An AVAudioPlayerNode renders NOTHING until it is playing. Buffers
+            // scheduled onto a stopped node queue up and are never heard — which is
+            // exactly what every effect here was doing. The music node was started
+            // in playMusic(); this one never was, so the whole SFX path was silent
+            // while looking perfectly healthy in the code.
+            if self.engine.isRunning && !self.sfxNode.isPlaying {
+                self.sfxNode.play()
+            }
             if ProcessInfo.processInfo.arguments.contains("-TestSfx") {
-                print("[Mossgate:AUDIO] schedule frames=\(buffer.frameLength) running=\(self.engine.isRunning) mixerVol=\(self.sfxMixer.outputVolume) nodeVol=\(self.sfxNode.volume) formatCh=\(buffer.format.channelCount)")
+                print("[Mossgate:AUDIO] schedule frames=\(buffer.frameLength) "
+                      + "running=\(self.engine.isRunning) playing=\(self.sfxNode.isPlaying) "
+                      + "mixerVol=\(self.sfxMixer.outputVolume) "
+                      + "bufferPeak=\(String(format: "%.3f", Self.peak(of: buffer)))")
             }
             self.sfxNode.scheduleBuffer(buffer, completionHandler: nil)
         }
     }
 
+    /// Loudest sample in a rendered buffer — what the effect contains before any
+    /// mixer volume is applied.
+    static func peak(of buffer: AVAudioPCMBuffer) -> Float {
+        guard let ch = buffer.floatChannelData else { return 0 }
+        var p: Float = 0
+        for c in 0..<Int(buffer.format.channelCount) {
+            for i in 0..<Int(buffer.frameLength) { p = max(p, abs(ch[c][i])) }
+        }
+        return p
+    }
+
+    // ──────────── Offline verification ────────────
+
+    /// Test hook: `-TestSfx 1` plays every effect through the REAL engine graph in
+    /// offline mode and reports what comes out the far end.
+    ///
+    /// Measuring a synthesised buffer on its own proves nothing about whether anyone
+    /// can hear it: the fault here was a player node that was never started, and a
+    /// buffer measures exactly the same whether or not its node is playing. This
+    /// renders the graph, so the node, the mixer volume and the routing are all in
+    /// the measurement — it is the test that would have caught the silence.
+    func runSfxProbe() {
+        let outFormat = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 2)!
+        engine.stop()
+        do {
+            try engine.enableManualRenderingMode(.offline, format: outFormat,
+                                                 maximumFrameCount: 4_096)
+            try engine.start()
+        } catch {
+            print("[Mossgate:AUDIO] offline render unavailable: \(error)")
+            return
+        }
+        print("[Mossgate:AUDIO] offline: engineRunning=\(engine.isRunning) "
+              + "nodePlayingBeforeAnySfx=\(sfxNode.isPlaying) "
+              + "mixerVolume=\(sfxMixer.outputVolume)")
+
+        let effects: [(String, () -> Void)] = [
+            ("jump",         { self.jump() }),
+            ("jump(double)", { self.jump(true) }),
+            ("coin",         { self.coin() }),
+            ("land",         { self.land() }),
+            ("checkpoint",   { self.checkpoint() }),
+            ("die",          { self.die() }),
+            ("win",          { self.win() }),
+            ("tap",          { self.tap() }),
+        ]
+        var silent: [String] = []
+        for (name, fire) in effects {
+            fire()
+            audioQueue.sync { }                     // let the schedule land
+            let peak = renderOfflinePeak(seconds: 1.4)
+            if peak < 0.01 { silent.append(name) }
+            print("[Mossgate:AUDIO] \(name): engineOutputPeak=\(String(format: "%.4f", peak))")
+        }
+        print("[Mossgate:AUDIO] TOTAL effects=\(effects.count) silent=\(silent.count) "
+              + (silent.isEmpty ? "all audible" : "SILENT: \(silent.joined(separator: ", "))"))
+
+        // Negative control on the REAL mute path. `render()` returns before
+        // scheduling anything when the SFX toggle is off, so nothing can be heard —
+        // that is the mechanism the Setup switch uses.
+        //
+        // Muting the mixer instead proved nothing here: an `outputVolume` change is
+        // not applied under manual rendering, which is a measurement artefact. The
+        // game does not depend on it either way, because the toggle stops the buffer
+        // being rendered at all rather than turning its volume down.
+        let wasOn = settings.sfxOn
+        settings.sfxOn = false
+        coin()
+        audioQueue.sync { }
+        let mutedPeak = renderOfflinePeak(seconds: 1.4)
+        settings.sfxOn = wasOn
+        sfxMixer.outputVolume = wasOn ? Float(settings.sfxVolume) : 0
+        print("[Mossgate:AUDIO] control(sfx toggle off): engineOutputPeak="
+              + "\(String(format: "%.4f", mutedPeak)) "
+              + (mutedPeak < 0.01 ? "silent as expected" : "UNEXPECTED — not measuring the graph"))
+
+        // Put the engine back the way the game expects to find it.
+        engine.stop()
+        engine.disableManualRenderingMode()
+        try? engine.start()
+    }
+
+    /// Renders `seconds` of the live graph and returns the loudest sample seen.
+    private func renderOfflinePeak(seconds: Double) -> Float {
+        let target = AVAudioFrameCount(seconds * 44_100)
+        guard let buf = AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat,
+                                         frameCapacity: 4_096) else { return 0 }
+        var peak: Float = 0
+        var done: AVAudioFrameCount = 0
+        var spins = 0
+        while done < target && spins < 2_000 {
+            spins += 1
+            do {
+                let status = try engine.renderOffline(4_096, to: buf)
+                switch status {
+                case .success:
+                    if let ch = buf.floatChannelData {
+                        for c in 0..<Int(buf.format.channelCount) {
+                            for i in 0..<Int(buf.frameLength) {
+                                peak = max(peak, abs(ch[c][i]))
+                            }
+                        }
+                    }
+                    done += buf.frameLength
+                case .cannotDoInCurrentContext:
+                    continue
+                default:
+                    return peak
+                }
+            } catch {
+                print("[Mossgate:AUDIO] renderOffline: \(error)")
+                return peak
+            }
+        }
+        return peak
+    }
+
     // ──────────── SFX (procedural) ────────────
+    //
+    // `vol` is the PEAK sample level of the finished effect — `render()` normalises
+    // the whole thing to it — so these numbers are directly comparable with the
+    // music, whose file peaks around 0.85 and plays through its own mixer. They used
+    // to sit at 0.04-0.075, about twelve times below the music, which is inaudible
+    // in practice even once the node is playing and the toggle is on.
 
     func jump(_ double: Bool = false) {
         let from: Double = double ? 560 : 420
         let to: Double = double ? 640 : 220
-        tone(freqFrom: from, freqTo: to, dur: 0.11, type: .square, vol: 0.06)
+        tone(freqFrom: from, freqTo: to, dur: 0.11, type: .square, vol: 0.55)
     }
 
     func coin() {
-        tone(freqFrom: 880, freqTo: 1320, dur: 0.08, type: .triangle, vol: 0.07)
-        tone(freqFrom: 1320, freqTo: 1760, dur: 0.1, type: .sine, vol: 0.04, delay: 0.05)
+        tone(freqFrom: 880, freqTo: 1320, dur: 0.08, type: .triangle, vol: 0.62)
+        tone(freqFrom: 1320, freqTo: 1760, dur: 0.1, type: .sine, vol: 0.36, delay: 0.05)
     }
 
     func land() {
-        noise(dur: 0.06, vol: 0.04, cutoff: 280)
+        noise(dur: 0.06, vol: 0.45, cutoff: 280)
     }
 
     func checkpoint() {
-        tone(freqFrom: 520, freqTo: 780, dur: 0.14, type: .triangle, vol: 0.06)
-        tone(freqFrom: 780, freqTo: 1040, dur: 0.18, type: .sine, vol: 0.05, delay: 0.08)
+        tone(freqFrom: 520, freqTo: 780, dur: 0.14, type: .triangle, vol: 0.55)
+        tone(freqFrom: 780, freqTo: 1040, dur: 0.18, type: .sine, vol: 0.45, delay: 0.08)
     }
 
     func die() {
-        tone(freqFrom: 220, freqTo: 50, dur: 0.35, type: .sawtooth, vol: 0.07)
-        noise(dur: 0.25, vol: 0.06, cutoff: 180)
+        tone(freqFrom: 220, freqTo: 50, dur: 0.35, type: .sawtooth, vol: 0.70)
+        noise(dur: 0.25, vol: 0.55, cutoff: 180)
     }
 
     /// Gate reached. A rising pickup into a sustained C major chord with a bell
@@ -274,12 +408,12 @@ final class AudioEngine {
         notes.append(Note(freq: 2093.005, dur: 0.85, type: .sine, rel: 0.06,
                           at: at + 0.13, sustain: 0.15))
 
-        guard let buffer = render(notes, vol: 0.075) else { return }
+        guard let buffer = render(notes, vol: 0.78) else { return }
         scheduleSFX(buffer)
     }
 
     func tap() {
-        tone(freqFrom: 320, freqTo: 480, dur: 0.06, type: .sine, vol: 0.04)
+        tone(freqFrom: 320, freqTo: 480, dur: 0.06, type: .sine, vol: 0.40)
     }
 
     // ──────────── Tone synth helpers ────────────

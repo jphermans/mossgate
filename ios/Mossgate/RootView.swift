@@ -102,6 +102,11 @@ struct RootView: View {
         .onAppear {
                     wireController()
                     Store.shared.start()
+                    // Test hook: -TestSfx 1 renders every effect through the real
+                    // audio graph offline and reports the level that comes out.
+                    if ProcessInfo.processInfo.arguments.contains("-TestSfx") {
+                        AudioEngine.shared.runSfxProbe()
+                    }
                     AppDelegate.orientationLock = .portrait
                     let args = ProcessInfo.processInfo.arguments
                     // Test hook: -OpenSetup 1 lands on the title screen with the
