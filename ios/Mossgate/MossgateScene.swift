@@ -279,6 +279,60 @@ final class MossgateScene: SKScene {
         lanternTexture?.filteringMode = .linear
 
         runAutopilotTestIfRequested()
+        runLevelGenTestIfRequested()
+    }
+
+    /// Test hook: `-TestLevelGen 1` builds every gate for this run seed and reports
+    /// what each world asks of the player, so the generator's guarantee is measured
+    /// rather than asserted.
+    private func runLevelGenTestIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestLevelGen") else { return }
+        let seed = SettingsStore.shared.runSeed
+        let gates = Levels.build(seed: seed)
+        var generated = 0
+        for world in Worlds.all {
+            let mine = gates.filter { $0.world == world.id }
+            var widest: CGFloat = 0
+            var tallest: CGFloat = 0
+            var genHere = 0
+            var genWidest: CGFloat = 0
+            var genTallest: CGFloat = 0
+            var genOver = 0
+            var genTight = 0
+            var segs = 0
+            for g in mine {
+                let r = LevelGen.inspect(g)
+                segs += r.segments
+                widest = max(widest, r.widestGap)
+                tallest = max(tallest, r.tallestStep)
+                // The generator's OWN compliance, measured separately: the authored
+                // gates are hand-built and are allowed to break these rules, so
+                // folding them in would hide whether the generator holds its limits.
+                if g.blurb == LevelGen.generatedBlurb {
+                    genHere += 1
+                    genWidest = max(genWidest, r.widestGap)
+                    genTallest = max(genTallest, r.tallestStep)
+                    genTight += r.bramblesTooTight
+                    if !r.ok {
+                        genOver += 1
+                        print("[Mossgate:GEN]   over limit: world \(g.world) key \(g.id) "
+                              + "\"\(g.name)\" gap=\(Int(r.widestGap)) step=\(Int(r.tallestStep)) "
+                              + "brambles=\(r.brambles) tight=\(r.bramblesTooTight) "
+                              + "worstClearance=\(Int(r.worstClearance))/\(Int(LevelGen.spikeClearance)) "
+                              + "groundBlocks=\(g.solids.filter { !$0.oneway }.count)")
+                    }
+                }
+            }
+            generated += genHere
+            print("[Mossgate:GEN] world \(world.id) \"\(world.name)\" gates=\(mine.count) "
+                  + "generated=\(genHere) segments=\(segs) "
+                  + "| all: gap=\(Int(widest))/\(Int(LevelGen.maxGap)) step=\(Int(tallest))/\(Int(LevelGen.maxStepUp)) "
+                  + "| generated only: gap=\(Int(genWidest)) step=\(Int(genTallest)) "
+                  + "tightBrambles=\(genTight) overLimit=\(genOver) "
+                  + "\(genOver == 0 ? "ok" : "CHECK")")
+        }
+        print("[Mossgate:GEN] TOTAL gates=\(gates.count) generated=\(generated) "
+              + "authored=\(gates.count - generated) seed=\(seed)")
     }
 
     /// Test hook: `-TestAutopilot 1` plays every level with the autopilot and

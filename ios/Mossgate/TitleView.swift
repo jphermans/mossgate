@@ -6,9 +6,18 @@ struct TitleView: View {
     let onOpenSetup: () -> Void
     let onOpenHelp: () -> Void
     let onOpenGameCenter: () -> Void
+    /// Tapped a world that is not playable — either the paywall or the progression.
+    let onLockedTap: (World) -> Void
+    let onBuyFullGame: () -> Void
+    let onRestore: () -> Void
 
     @ObservedObject private var settings = SettingsStore.shared
-    @State private var expandedWorld: Int = 0
+    @ObservedObject private var store = Store.shared
+    /// Which world is expanded. Test hook `-CollapseWorlds 1` starts with none of
+    /// them open, so every world card and the purchase card fit on one screen for a
+    /// screenshot — there is no way to script a scroll.
+    @State private var expandedWorld: Int =
+        ProcessInfo.processInfo.arguments.contains("-CollapseWorlds") ? -1 : 0
 
     var body: some View {
         ZStack {
@@ -17,6 +26,12 @@ struct TitleView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     header
+                    // Above the world list, not below it: in landscape the six world
+                    // cards fill the screen, so a purchase card underneath them is
+                    // something you have to go looking for.
+                    if !settings.hasFullGame {
+                        fullGameCard
+                    }
                     ForEach(Worlds.all, id: \.id) { world in
                         worldCard(world)
                     }
@@ -106,43 +121,55 @@ struct TitleView: View {
         }
     }
 
+    /// World 0 is free; the other five are the single purchase. Locked cards say
+    /// which kind of locked they are, because "buy this" and "finish the last
+    /// world" are very different things to be told.
     private func worldCard(_ world: World) -> some View {
-        let isOpen = expandedWorld == world.id
-        let levelsInWorld = Levels.all.filter { $0.world == world.id }
-        let clearedCount = levelsInWorld.filter { settings.cleared[$0.id] }.count
+        let unlocked = settings.worldUnlocked(world.id)
+        let isOpen = unlocked && expandedWorld == world.id
+        let gates = settings.gates.filter { $0.world == world.id }
+        let clearedCount = gates.filter { settings.cleared[$0.id] }.count
         return VStack(alignment: .leading, spacing: 8) {
             Button {
+                guard unlocked else { onLockedTap(world); return }
                 withAnimation(.easeInOut(duration: 0.18)) {
                     expandedWorld = (expandedWorld == world.id) ? -1 : world.id
                 }
             } label: {
-                HStack {
+                HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(world.name)
                             .font(.system(size: 17, weight: .semibold))
-                            .foregroundStyle(Color("MossgateCream"))
-                        Text(world.blurb)
+                            .foregroundStyle(unlocked ? Color("MossgateCream") : Color("MossgateMuted"))
+                        Text(unlocked ? world.blurb : (settings.worldLockReason(world.id) ?? ""))
                             .font(.system(size: 11))
                             .foregroundStyle(Color("MossgateMuted"))
                     }
                     Spacer()
-                    Text("\(clearedCount)/\(levelsInWorld.count)")
-                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Color("MossgateLantern"))
-                    Image(systemName: isOpen ? "chevron.up" : "chevron.down")
-                        .foregroundStyle(Color("MossgateMuted"))
+                    if unlocked {
+                        Text("\(clearedCount)/\(gates.count)")
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color("MossgateLantern"))
+                        Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                            .foregroundStyle(Color("MossgateMuted"))
+                    } else {
+                        Label(settings.hasFullGame ? "Locked" : "Full game",
+                              systemImage: "lock.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color("MossgateLantern"))
+                    }
                 }
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color("MossgateSurface").opacity(0.9))
+                        .fill(Color("MossgateSurface").opacity(unlocked ? 0.9 : 0.5))
                         .overlay(RoundedRectangle(cornerRadius: 14)
                             .strokeBorder(Color("MossgateBorder"), lineWidth: 1))
                 )
             }
             if isOpen {
                 VStack(spacing: 6) {
-                    ForEach(levelsInWorld, id: \.id) { level in
+                    ForEach(gates, id: \.id) { level in
                         Button { onStartLevel(level.id) } label: {
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -178,6 +205,55 @@ struct TitleView: View {
                 }
             }
         }
+    }
+
+    /// The single purchase. Only shown while it is not owned, so the free game never
+    /// has a price tag sitting on it unprompted.
+    private var fullGameCard: some View {
+        let extra = Levels.totalGates - Worlds.gatesPerWorld
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Five more worlds")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(Color("MossgateCream"))
+            Text("Mossgate Dusk is yours to keep. The Full Game unlocks Ember Caves, Frost Spires, Void Garden, Sunken Choir and Ashen Crown — \(extra) more gates, and every one of them rebuilt each time you play.")
+                .font(.system(size: 12))
+                .foregroundStyle(Color("MossgateMuted"))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 10) {
+                Button(action: onBuyFullGame) {
+                    Text(store.busy ? "Contacting the App Store…" : (store.priceText ?? "Unlock Full Game"))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color("MossgatePrimaryFg"))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color("MossgateLantern"))
+                        )
+                }
+                .disabled(store.busy)
+                Button(action: onRestore) {
+                    Text("Restore")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color("MossgateCream"))
+                        .frame(minWidth: 104, minHeight: 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color("MossgateSurface").opacity(0.85))
+                                .overlay(RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(Color("MossgateBorder"), lineWidth: 1))
+                        )
+                }
+                .disabled(store.busy)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color("MossgateLantern").opacity(0.10))
+                .overlay(RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(Color("MossgateLantern").opacity(0.45), lineWidth: 1))
+        )
     }
 
     private var credits: some View {

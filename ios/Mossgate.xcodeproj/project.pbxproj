@@ -27,15 +27,18 @@
 		69EA21DD2A6D2EFDECF3CD8A /* run-4.png in Resources */ = {isa = PBXBuildFile; fileRef = 08B54241A4DB3F3AB7434FE8 /* run-4.png */; };
 		7AC3E592CD0D8C2839A04A3F /* AboutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A692694B41AA757BEE2A97B3 /* AboutView.swift */; };
 		7AD60B3631548B18A3BBCBEF /* coin-1.png in Resources */ = {isa = PBXBuildFile; fileRef = AD463A8F27CCB04FFBC5B3D5 /* coin-1.png */; };
+		84C94AF975A06E28E325CC13 /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8BEC765FFED62F6AB02AF57 /* Store.swift */; };
 		85D8E3C2AE475620491C2680 /* dusk.m4a in Resources */ = {isa = PBXBuildFile; fileRef = 653273BEAEE9FA37F2A54538 /* dusk.m4a */; };
 		85F860C1AFE02094E5446E2B /* Autopilot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD7B26F6CE445E7B06F9E22 /* Autopilot.swift */; };
 		86CC4DA8B2ECE2FBD394D066 /* block.png in Resources */ = {isa = PBXBuildFile; fileRef = 3AC54C209839553DCEFF24A0 /* block.png */; };
+		8A09DC4E108C83CF43B48AD9 /* Levels+Run.swift in Sources */ = {isa = PBXBuildFile; fileRef = B01E7B3B0AF579802D9A34EF /* Levels+Run.swift */; };
 		90AB3F0656EED9C5EEFA1D5B /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3079C6DCC25B2043D1094B29 /* SettingsStore.swift */; };
 		91FE202F303157A0E1AA3ED8 /* run-3.png in Resources */ = {isa = PBXBuildFile; fileRef = 42A7B0FC4C6C8945DE9695E7 /* run-3.png */; };
 		9586D8CF60582AC794E57BBF /* coin-3.png in Resources */ = {isa = PBXBuildFile; fileRef = 7364E6AF4323C1E19A168CB8 /* coin-3.png */; };
 		963A0E078E3BC51864EC2A8B /* flag-1.png in Resources */ = {isa = PBXBuildFile; fileRef = A140C1485CEAAF7B0D8EABFD /* flag-1.png */; };
 		9868299555C59030F2219310 /* flag-2.png in Resources */ = {isa = PBXBuildFile; fileRef = CD99D50D086FD9E0CDAAB32F /* flag-2.png */; };
 		A6FAB090F4EBABF700DF34AA /* Levels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A8F39F2FD140521A9E46725 /* Levels.swift */; };
+		B151A737584D6DF174E96616 /* LevelGen.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3406F9383B035A5B45B862D3 /* LevelGen.swift */; };
 		B52D787858D750DFEFEE8465 /* idle-3.png in Resources */ = {isa = PBXBuildFile; fileRef = E0A84C936FBC190E4D31118F /* idle-3.png */; };
 		B5C670AD76C85CCD757D6001 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5C2C89684E0C1C3C309873 /* RootView.swift */; };
 		B6CA55B0754B58D93ED7399D /* MossgateScene.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEF0BD811ACEF143573A6320 /* MossgateScene.swift */; };
@@ -63,6 +66,7 @@
 		1D0A8385B1BE7ADF6585BDA6 /* checkpoint.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = checkpoint.png; sourceTree = "<group>"; };
 		3079C6DCC25B2043D1094B29 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		31AEE4DA1BAA6886EF0CA064 /* GameCenterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterManager.swift; sourceTree = "<group>"; };
+		3406F9383B035A5B45B862D3 /* LevelGen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LevelGen.swift; sourceTree = "<group>"; };
 		37535473C3792A3851DB3D8E /* jump-3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "jump-3.png"; sourceTree = "<group>"; };
 		377ACF894833CE4702A004C9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		3A8F39F2FD140521A9E46725 /* Levels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Levels.swift; sourceTree = "<group>"; };
@@ -87,10 +91,12 @@
 		A5EFF8135990B5A4B53AE6E7 /* jump-4.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "jump-4.png"; sourceTree = "<group>"; };
 		A692694B41AA757BEE2A97B3 /* AboutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
 		A761DAA2F1480F0AD528EA34 /* flag-4.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "flag-4.png"; sourceTree = "<group>"; };
+		A8BEC765FFED62F6AB02AF57 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		AAF2A3F3D549406233FB4B07 /* jump-1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "jump-1.png"; sourceTree = "<group>"; };
 		AB54D58AF3EF1C645C145ACC /* MossgateApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MossgateApp.swift; sourceTree = "<group>"; };
 		AC0897B7928508E3E9AEAAA4 /* idle-4.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "idle-4.png"; sourceTree = "<group>"; };
 		AD463A8F27CCB04FFBC5B3D5 /* coin-1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "coin-1.png"; sourceTree = "<group>"; };
+		B01E7B3B0AF579802D9A34EF /* Levels+Run.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Levels+Run.swift"; sourceTree = "<group>"; };
 		B0B612E510B4C35C7163A64C /* Mossgate.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Mossgate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0D15C2A2623B127CA8C661A /* idle-1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "idle-1.png"; sourceTree = "<group>"; };
 		C9AED1889F92171EC5C7C17D /* AudioEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngine.swift; sourceTree = "<group>"; };
@@ -127,7 +133,9 @@
 				31AEE4DA1BAA6886EF0CA064 /* GameCenterManager.swift */,
 				70BD29C7FBBFCB3E8F0E4C6C /* GamepadManager.swift */,
 				9F7BCBEF4E3D0F6F044C175D /* Level.swift */,
+				3406F9383B035A5B45B862D3 /* LevelGen.swift */,
 				3A8F39F2FD140521A9E46725 /* Levels.swift */,
+				B01E7B3B0AF579802D9A34EF /* Levels+Run.swift */,
 				AB54D58AF3EF1C645C145ACC /* MossgateApp.swift */,
 				89D27F4086E0CD4991CB2888 /* MossgateGameView.swift */,
 				CEF0BD811ACEF143573A6320 /* MossgateScene.swift */,
@@ -137,6 +145,7 @@
 				3079C6DCC25B2043D1094B29 /* SettingsStore.swift */,
 				4B685C76C1A57494AAA5BAB2 /* SetupView.swift */,
 				8564AE6836A6BFFCE26ED845 /* SplashView.swift */,
+				A8BEC765FFED62F6AB02AF57 /* Store.swift */,
 				FE15C6D83CACF57CBC84E245 /* TitleView.swift */,
 			);
 			path = Mossgate;
@@ -305,6 +314,8 @@
 				FB1D433C6D72EAB12141DAB3 /* GameCenterManager.swift in Sources */,
 				28EA0CF96DF3C2E370389371 /* GamepadManager.swift in Sources */,
 				FC889CC01379AB9F4BEFD5A7 /* Level.swift in Sources */,
+				B151A737584D6DF174E96616 /* LevelGen.swift in Sources */,
+				8A09DC4E108C83CF43B48AD9 /* Levels+Run.swift in Sources */,
 				A6FAB090F4EBABF700DF34AA /* Levels.swift in Sources */,
 				2EB07C870EC537253C392CA7 /* MossgateApp.swift in Sources */,
 				38D05A2C4058E433A6D37733 /* MossgateGameView.swift in Sources */,
@@ -314,6 +325,7 @@
 				90AB3F0656EED9C5EEFA1D5B /* SettingsStore.swift in Sources */,
 				DC17054C2009890E2F102FDE /* SetupView.swift in Sources */,
 				350C112DD1ACD84AC6083E97 /* SplashView.swift in Sources */,
+				84C94AF975A06E28E325CC13 /* Store.swift in Sources */,
 				2CFC1CF86F95E046D4C00B3F /* TitleView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -356,7 +368,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -391,7 +403,7 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.5.1;
+				MARKETING_VERSION = 0.6.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -473,7 +485,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 15;
+				CURRENT_PROJECT_VERSION = 16;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -502,7 +514,7 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.5.1;
+				MARKETING_VERSION = 0.6.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = Mossgate;

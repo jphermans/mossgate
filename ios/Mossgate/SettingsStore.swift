@@ -40,9 +40,48 @@ final class SettingsStore: ObservableObject {
         return Int.random(in: 1...999_999)
     }()
 
+    /// The run's gate list. Rebuilt when the seed changes, and cached here so the
+    /// title screen does not regenerate 36 gates on every layout pass.
+    @Published private(set) var gates: [Level] = []
+
     /// Roll a fresh set of worlds without relaunching.
     func newRun() {
         runSeed = Int.random(in: 1...999_999)
+        gates = Levels.build(seed: runSeed)
+    }
+
+    // MARK: - The full game, and world progression
+
+    /// Whether the single in-app purchase is owned. Written by `Store` and read by
+    /// the gating rule below, so the paywall has exactly one definition.
+    @Published var hasFullGame = false
+
+    /// One-shot message for the player, shown as an alert and cleared on dismiss.
+    @Published var notice: String?
+
+    /// Finished every gate in a world. The gate count is fixed even though the
+    /// layouts are not, which is what makes this stable across runs.
+    func worldComplete(_ world: Int) -> Bool {
+        let base = world * Worlds.gatesPerWorld
+        guard base >= 0, base + Worlds.gatesPerWorld <= cleared.count else { return false }
+        return (base..<base + Worlds.gatesPerWorld).allSatisfy { cleared[$0] }
+    }
+
+    /// A world is playable when it is the free one, or when the full game is owned
+    /// AND every world before it is finished. Two rules, in that order: the paywall
+    /// first, then the progression.
+    func worldUnlocked(_ world: Int) -> Bool {
+        if Worlds.all.first(where: { $0.id == world })?.free == true { return true }
+        guard hasFullGame else { return false }
+        return (0..<world).allSatisfy { worldComplete($0) }
+    }
+
+    /// Why a world cannot be played yet, or nil when it can. Shown on its card.
+    func worldLockReason(_ world: Int) -> String? {
+        if worldUnlocked(world) { return nil }
+        if !hasFullGame { return "Full game" }
+        let prev = Worlds.all.first { $0.id == world - 1 }
+        return "Finish \(prev?.name ?? "the world before")"
     }
 
     /// Per-level progress (cleared + best coin count), persisted across launches.
@@ -64,12 +103,16 @@ final class SettingsStore: ObservableObject {
 
         self.lives = UserDefaults.standard.object(forKey: "lives") as? Int ?? SettingsStore.maxLives
 
-        let totalLevels = Levels.all.count
+        // A constant, not Levels.all.count: this runs while the singleton is being
+        // built, and Levels.all reads the run seed back off it.
+        let totalLevels = Levels.totalGates
         let savedCleared = (UserDefaults.standard.array(forKey: "cleared") as? [Bool]) ?? []
         self.cleared = (0..<totalLevels).map { savedCleared.indices.contains($0) ? savedCleared[$0] : false }
 
         let savedBest = (UserDefaults.standard.array(forKey: "bestCoins") as? [Int]) ?? []
         self.bestCoins = (0..<totalLevels).map { savedBest.indices.contains($0) ? savedBest[$0] : 0 }
+
+        self.gates = Levels.build(seed: runSeed)
     }
 
     // MARK: - Light / lives
@@ -108,8 +151,8 @@ final class SettingsStore: ObservableObject {
     }
 
     func resetProgress() {
-        cleared = Array(repeating: false, count: Levels.all.count)
-        bestCoins = Array(repeating: 0, count: Levels.all.count)
+        cleared = Array(repeating: false, count: Levels.totalGates)
+        bestCoins = Array(repeating: 0, count: Levels.totalGates)
         UserDefaults.standard.removeObject(forKey: "cleared")
         UserDefaults.standard.removeObject(forKey: "bestCoins")
         refillLives()

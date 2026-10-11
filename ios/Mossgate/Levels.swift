@@ -4,7 +4,10 @@ import CoreGraphics
 /// All levels. Currently 4 worlds, 15 levels (~3-4 hours of play).
 /// Layout matches the original game canvas pixels (1 unit = 1 pt).
 enum Levels {
-    static let all: [Level] = [
+    /// The hand-authored gates. They open their world: they teach the idea, and
+    /// they are identical every run so there is something to learn. Everything
+    /// after them is generated — see `Levels.build(seed:)`.
+    static let authored: [Level] = [
         // ──────────── WORLD 1: MOSSGATE DUSK ────────────
         Level(
             id: 0, world: 0,
@@ -119,7 +122,7 @@ enum Levels {
 
         // ──────────── WORLD 2: EMBER CAVES ────────────
         Level(
-            id: 3, world: 1,
+            id: 6, world: 1,
             name: "Tinder Hall",
             blurb: "The first room down, and already it listens.",
             width: 2880, height: 880, killY: 860,
@@ -152,7 +155,7 @@ enum Levels {
             flag: CGPoint(x: 2740, y: 580)
         ),
         Level(
-            id: 4, world: 1,
+            id: 7, world: 1,
             name: "Sulphur Ledge",
             blurb: "Hold the line. The gap below is no accident.",
             width: 3200, height: 1080, killY: 1060,
@@ -194,7 +197,7 @@ enum Levels {
             flag: CGPoint(x: 3040, y: 380)
         ),
         Level(
-            id: 5, world: 1,
+            id: 8, world: 1,
             name: "Pyre Path",
             blurb: "The stones rise and fall. So must you.",
             width: 3440, height: 1180, killY: 1160,
@@ -238,7 +241,7 @@ enum Levels {
             flag: CGPoint(x: 3200, y: 540)
         ),
         Level(
-            id: 6, world: 1,
+            id: 9, world: 1,
             name: "Ash Crown",
             blurb: "Three columns, three falls, one final gate.",
             width: 3680, height: 1240, killY: 1220,
@@ -294,12 +297,24 @@ struct World {
     let id: Int
     let name: String
     let blurb: String
+    /// The free tier. Exactly one world is free, so the paid set is genuinely
+    /// additional rather than a way to finish the free one.
+    let free: Bool
 }
 
 enum Worlds {
+    /// Six worlds. One free, five behind the single in-app purchase.
     static let all: [World] = [
-        World(id: 0, name: "Mossgate Dusk", blurb: "The wick still burns."),
-        World(id: 1, name: "Ember Caves",  blurb: "A warm light, deeper down."),
-        // Worlds 2+ (Frost Spires, Void Garden) intentionally left for the next session
+        World(id: 0, name: "Mossgate Dusk", blurb: "The wick still burns.", free: true),
+        World(id: 1, name: "Ember Caves",  blurb: "A warm light, deeper down.", free: false),
+        World(id: 2, name: "Frost Spires", blurb: "Cold stone, and a wind that never stops.", free: false),
+        World(id: 3, name: "Void Garden",  blurb: "Nothing grows here. It still glows.", free: false),
+        World(id: 4, name: "Sunken Choir", blurb: "The water kept the singing.", free: false),
+        World(id: 5, name: "Ashen Crown",  blurb: "The last gate before the dark.", free: false),
     ]
+
+    /// Gates in every world. Fixed, even though the layouts are rebuilt each run:
+    /// progress, the "3/6" on the title screen and the "world complete" rule all
+    /// depend on the count being stable.
+    static let gatesPerWorld = 6
 }

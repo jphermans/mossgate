@@ -14,6 +14,7 @@ struct RootView: View {
     @State private var showHelp = false
     @StateObject private var touch = TouchState()
     @StateObject private var session = GameSession()
+    @ObservedObject private var store = Store.shared
 
     enum Phase: Equatable { case splash, title, game }
 
@@ -37,7 +38,18 @@ struct RootView: View {
                     onOpenHelp: { showHelp = true },
                     onOpenGameCenter: {
                         GameCenterManager.shared.openDashboard(presenter: topViewController())
-                    }
+                    },
+                    onLockedTap: { world in
+                        if SettingsStore.shared.hasFullGame {
+                            let prev = Worlds.all.first { $0.id == world.id - 1 }?.name
+                                       ?? "the world before"
+                            SettingsStore.shared.notice = "Finish \(prev) to open this one."
+                        } else {
+                            Task { await Store.shared.buy() }
+                        }
+                    },
+                    onBuyFullGame: { Task { await Store.shared.buy() } },
+                    onRestore: { Task { await Store.shared.restore() } }
                 )
                 .transition(.opacity)
                 .onAppear { AudioEngine.shared.playMusic(.dusk) }
@@ -64,6 +76,16 @@ struct RootView: View {
         .onReceive(SettingsStore.shared.$controllerOn) { on in
             session.scene?.setControllerEnabled(on)
         }
+        // One alert for both channels: a Store message and a gameplay notice would
+        // otherwise be two alerts competing for the same view.
+        .alert("Mossgate", isPresented: Binding(
+            get: { store.message != nil || SettingsStore.shared.notice != nil },
+            set: { if !$0 { store.message = nil; SettingsStore.shared.notice = nil } }
+        )) {
+            Button("OK") { store.message = nil; SettingsStore.shared.notice = nil }
+        } message: {
+            Text(store.message ?? SettingsStore.shared.notice ?? "")
+        }
         // A reshuffle rebuilds the current level so the new world is visible
         // immediately. Setup is only reachable from the title screen, so no
         // in-level progress is lost.
@@ -79,6 +101,7 @@ struct RootView: View {
         }
         .onAppear {
                     wireController()
+                    Store.shared.start()
                     AppDelegate.orientationLock = .portrait
                     let args = ProcessInfo.processInfo.arguments
                     // Test hook: -OpenSetup 1 lands on the title screen with the
@@ -93,7 +116,7 @@ struct RootView: View {
                     if let i = args.firstIndex(of: "-StartInLevel"),
                        i + 1 < args.count,
                        let idx = Int(args[i + 1]),
-                       idx < Levels.all.count {
+                       idx < SettingsStore.shared.gates.count {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                             gameLevelIndex = idx
                             phase = .game
@@ -154,7 +177,7 @@ struct RootView: View {
                         if SettingsStore.shared.isOutOfLight { SettingsStore.shared.refillLives() }
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .title }
                     },
-                    onNext:   hud.phase == .win && gameLevelIndex < Levels.all.count - 1
+                    onNext:   hud.phase == .win && gameLevelIndex < SettingsStore.shared.gates.count - 1
                               ? { session.scene?.nextLevel(); gameLevelIndex += 1 }
                               : nil
                 )

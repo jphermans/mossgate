@@ -490,16 +490,20 @@ enum Autopilot {
     }
 
     /// Is there a surface the runner can stand on under this strip?
+    ///
+    /// The test is on the TOP of a block, not on its rectangle. Ground blocks are
+    /// cut deep, so testing the rect would let a step up "overlap" a probe taken at
+    /// the runner's feet — it would read as flat ground and walk into the wall
+    /// instead of jumping it.
     private static func groundUnder(_ s: Sim, from x: CGFloat, width: CGFloat, at y: CGFloat) -> Bool {
-        let probe = CGRect(x: x, y: y, width: width, height: 26)
         for sol in s.level.solids {
-            if probe.intersects(CGRect(x: sol.x, y: sol.y, width: sol.w, height: sol.h)) {
-                return true
-            }
+            if sol.x + sol.w <= x || sol.x >= x + width { continue }
+            if abs(sol.y - y) <= 14 { return true }
         }
         for (i, m) in s.level.movers.enumerated() {
             let p = s.moverPos[i]
-            if probe.intersects(CGRect(x: p.x, y: p.y, width: m.w, height: m.h)) { return true }
+            if p.x + m.w <= x || p.x >= x + width { continue }
+            if abs(p.y - y) <= 14 { return true }
         }
         return false
     }
