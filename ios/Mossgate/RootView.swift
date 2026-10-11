@@ -11,6 +11,7 @@ struct RootView: View {
     @State private var gameLevelIndex: Int = 0
     @State private var hud: MossgateScene.HudInfo = .empty
     @StateObject private var touch = TouchState()
+    @StateObject private var session = GameSession()
 
     enum Phase: Equatable { case splash, title, game }
 
@@ -58,6 +59,14 @@ struct RootView: View {
                     withAnimation(.easeInOut(duration: 0.35)) { phase = .title }
                 }
             }
+            // Test hook: -AutoStartLevel N launches straight into level N.
+            if let idx = ProcessInfo.processInfo.environment["AUTO_START_LEVEL"]
+                .flatMap({ Int($0) }), idx < Levels.all.count {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    gameLevelIndex = idx
+                    phase = .game
+                }
+            }
         }
     }
 
@@ -66,53 +75,34 @@ struct RootView: View {
     @ViewBuilder
     private var gameStack: some View {
         ZStack {
-            MossgateGameView(levelIndex: gameLevelIndex, hud: $hud)
+            MossgateGameView(levelIndex: gameLevelIndex, session: session, hud: $hud)
                 .ignoresSafeArea()
             GameControlsView(touch: touch, onSceneRef: { _ in })
             if hud.phase == .play {
                 GameHUDView(hud: hud) {
-                    scene()?.pause()
+                    session.scene?.pause()
                 }
             }
             if hud.phase == .pause || hud.phase == .dead || hud.phase == .win {
                 OverlayPanel(
                     phase: hud.phase,
                     hud: hud,
-                    onResume: { scene()?.resume() },
-                    onRetry:  { scene()?.retryLevel() },
+                    onResume: { session.scene?.resume() },
+                    onRetry:  { session.scene?.retryLevel() },
                     onQuit:   { withAnimation(.easeInOut(duration: 0.25)) { phase = .title } },
                     onNext:   hud.phase == .win && gameLevelIndex < Levels.all.count - 1
-                              ? { scene()?.nextLevel(); gameLevelIndex += 1 }
+                              ? { session.scene?.nextLevel(); gameLevelIndex += 1 }
                               : nil
                 )
             }
         }
-        .onChange(of: touch.left)  { _, _ in touch.push(to: scene()) }
-        .onChange(of: touch.right) { _, _ in touch.push(to: scene()) }
-        .onChange(of: touch.jump)  { _, _ in touch.push(to: scene()) }
-        .onChange(of: touch.down)  { _, _ in touch.push(to: scene()) }
+        .onChange(of: touch.left)  { _, _ in touch.push(to: session.scene) }
+        .onChange(of: touch.right) { _, _ in touch.push(to: session.scene) }
+        .onChange(of: touch.jump)  { _, _ in touch.push(to: session.scene) }
+        .onChange(of: touch.down)  { _, _ in touch.push(to: session.scene) }
     }
 
     // MARK: - Helpers
-
-    private func scene() -> MossgateScene? {
-        guard let window = UIApplication.shared.connectedScenes
-                .compactMap({ $0 as? UIWindowScene }).first?.windows.first else {
-            return nil
-        }
-        return findScene(in: window.rootViewController)
-    }
-
-    private func findScene(in vc: UIViewController?) -> MossgateScene? {
-        guard let vc else { return nil }
-        for sub in vc.children {
-            if let s = findScene(in: sub) { return s }
-        }
-        if let sk = vc.view as? SKView, let scene = sk.scene as? MossgateScene {
-            return scene
-        }
-        return nil
-    }
 
     private func topViewController() -> UIViewController? {
         guard let window = UIApplication.shared.connectedScenes

@@ -1,10 +1,12 @@
 import SwiftUI
 import SpriteKit
 
-/// SwiftUI wrapper around the SpriteKit game scene. Owns the SKView lifetime
-/// and pipes phase/HUD info back to the parent view via callbacks.
+/// SwiftUI wrapper around the SpriteKit game scene. Owns the SKView lifetime,
+/// pipes phase/HUD info back to the parent view via callbacks, and exposes the
+/// live scene through `GameSession` so RootView can drive touch input directly.
 struct MossgateGameView: UIViewRepresentable {
     let levelIndex: Int
+    let session: GameSession
     @Binding var hud: MossgateScene.HudInfo
 
     func makeUIView(context: Context) -> SKView {
@@ -15,19 +17,23 @@ struct MossgateGameView: UIViewRepresentable {
         view.showsNodeCount = false
         view.ignoresSiblingOrder = true
 
-        let scene = MossgateScene(size: view.bounds.size)
+        // Fixed 720×360 logical scene; resizeFill scales it to the device's actual
+        // size so every world unit = 1 scene point, regardless of iPhone model.
+        let scene = MossgateScene(size: CGSize(width: 720, height: 360))
         scene.scaleMode = .resizeFill
         scene.onPhaseChange = { _, info in
             DispatchQueue.main.async { hud = info }
         }
         scene.startLevel(levelIndex)
         context.coordinator.scene = scene
+        session.scene = scene
         view.presentScene(scene)
         return view
     }
 
     func updateUIView(_ uiView: SKView, context: Context) {
         guard let scene = context.coordinator.scene else { return }
+        session.scene = scene
         if scene.levelIndex != levelIndex {
             scene.startLevel(levelIndex)
         }
@@ -38,6 +44,16 @@ struct MossgateGameView: UIViewRepresentable {
     final class Coordinator {
         weak var scene: MossgateScene?
     }
+}
+
+/// Shared object between RootView and MossgateGameView. The view writes the
+/// live scene into `scene` once it's created; RootView reads it to push touch
+/// state and trigger pause/resume/retry. Using a shared object beats walking
+/// the UIViewController tree to find the SKView, which is unreliable under the
+/// SwiftUI hosting hierarchy.
+@MainActor
+final class GameSession: ObservableObject {
+    weak var scene: MossgateScene?
 }
 
 /// Touch input bridge — exposes four booleans the scene polls each frame.

@@ -75,7 +75,7 @@ final class MossgateScene: SKScene {
 
     // Camera + scaling
     private let cameraNode = SKCameraNode()
-    private var viewScale: CGFloat = 1.0  // world units per point
+    private var viewScale: CGFloat = 1.0  // scene points per world unit (= scene.width / 720)
 
     // Texture cache
     private var idleFrames: [SKTexture] = []
@@ -618,6 +618,7 @@ final class MossgateScene: SKScene {
             }
             playerNode.texture = frames[idx]
         }
+        // SKCameraNode centers the view on its position; node positions are in world coords.
         playerNode.position = CGPoint(x: playerX + Phys.playerW/2, y: playerY + Phys.playerH/2)
         playerNode.xScale = facing
         playerNode.yScale = 1
@@ -627,7 +628,8 @@ final class MossgateScene: SKScene {
             let frame = Int(time * 8) % coinFrames.count
             node.texture = coinFrames[frame]
             let bob = sin(time * 3.2 + CGFloat(i)) * 3
-            node.position.y = level.coins[i].y + bob
+            let c = level.coins[i]
+            node.position = CGPoint(x: c.x, y: c.y + bob)
             node.isHidden = false
         }
         for (i, node) in coinNodes.enumerated() where coinsGot.contains(i) {
@@ -639,12 +641,21 @@ final class MossgateScene: SKScene {
             let idx = Int(time * 6) % flagFrames.count
             flagNode.texture = flagFrames[idx]
         }
+        flagNode.position = CGPoint(x: level.flag.x, y: level.flag.y)
 
-        // Checkpoints glow
+        // Checkpoints
         for (i, node) in checkpointNodes.enumerated() {
+            let c = level.checkpoints[i]
+            node.position = CGPoint(x: c.x, y: c.y - 36)
             let lit = i <= cp
             node.color = lit ? .white : .gray
             node.colorBlendFactor = lit ? 0 : 0.6
+        }
+
+        // Solids + movers (their loadLevel positions are correct; movers update each step)
+        for (i, m) in level.movers.enumerated() {
+            let p = moverPositions[i]
+            moverNodes[i].position = CGPoint(x: p.x, y: p.y)
         }
     }
 
