@@ -533,6 +533,132 @@ enum Autopilot {
         return best
     }
 
+    // MARK: - The coin layout
+
+    /// The game collects a coin when the player's chest passes within this far of
+    /// it. Mirror it exactly, or the test answers a question about a different game.
+    static let pickupRadius: CGFloat = 40
+
+    /// The point the pickup test measures from — the player's chest, matching
+    /// `MossgateScene`'s `feetX` / `midY`.
+    static func pickupPoint(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+        CGPoint(x: x + Phys.playerW / 2, y: y + Phys.playerH * 0.45)
+    }
+
+    /// Can a player standing on the surface below a coin actually collect it?
+    ///
+    /// This asks whether the CHEST comes within pickup range over a normal jump,
+    /// rather than whether the player can be at the coin's position. Nearly the same
+    /// question, and not quite — and the gap between them is exactly where a coin
+    /// that looks reachable turns out not to be.
+    static func collectible(_ coin: CGPoint, level: Level,
+                            phase: [CGFloat], period: [CGFloat]) -> Bool {
+        guard let ground = surfaceBelow(coin, level: level) else { return false }
+        let dt: CGFloat = 1.0 / 120.0
+        let launches: [(CGFloat, CGFloat?)] = [
+            (0, nil), (70, nil), (150, nil), (70, 0.22), (150, 0.34),
+        ]
+        for (runUp, second) in launches {
+            var sim = Sim(level: level, phase: phase, period: period)
+            sim.place(x: ground.x - runUp, y: ground.y - Phys.playerH)
+            let runUpTime = runUp / Phys.run
+            var t: CGFloat = 0
+            while t < 2.2 {
+                var input = Input()
+                input.right = true
+                if t >= runUpTime {
+                    let since = t - runUpTime
+                    let secondPress = second.map { since >= $0 && since < $0 + 0.10 } ?? false
+                    input.jump = since < 0.10 || secondPress
+                }
+                sim.step(dt, input)
+                t += dt
+                if sim.dead { break }
+                let p = pickupPoint(sim.x, sim.y)
+                if hypot(p.x - coin.x, p.y - coin.y) < pickupRadius { return true }
+            }
+        }
+        return false
+    }
+
+    /// Nudges a pickup to a per-run position, rejected if the new spot would sit
+    /// inside solid ground. Keeps the placement honest: a reshuffle can move a coin
+    /// but can never bury it.
+    static func nudged(_ p: CGPoint, index: Int, level: Level, seed: Int) -> CGPoint {
+        var rng = Split(seed: UInt64(bitPattern: Int64(seed &+ index &* 2_654_435_761)))
+        let dx = (rng.unit() - 0.5) * 56
+        let dy = (rng.unit() - 0.5) * 24
+        let candidate = CGPoint(x: p.x + dx, y: p.y + dy)
+        let box = CGRect(x: candidate.x - 15, y: candidate.y - 15, width: 30, height: 30)
+        for s in level.solids where !s.oneway {
+            if box.intersects(CGRect(x: s.x, y: s.y, width: s.w, height: s.h)) { return p }
+        }
+        return candidate
+    }
+
+    /// A home for a coin, proven collectible before it is accepted.
+    ///
+    /// Candidates are tried in order of preference — the probed arc first, so coins
+    /// still move around and vary with the seed — but each is checked against the
+    /// game's own pickup rule and only a passing one is used. The last resort is
+    /// directly above the surface below the anchor, which a standing jump cannot miss.
+    ///
+    /// This is the difference between believing a coin is reachable because the
+    /// placement maths looks right, and knowing it: 55 of 214 coins were unreachable
+    /// precisely because the maths was trusted.
+    static func placeCoin(anchor: CGPoint, index: Int, level: Level,
+                          phase: [CGFloat], period: [CGFloat], seed: Int) -> CGPoint {
+        var candidates: [CGPoint] = []
+        if let arc = variedCoin(near: anchor, level: level, phase: phase,
+                                period: period, seed: seed) {
+            candidates.append(arc)
+        }
+        candidates.append(nudged(anchor, index: index, level: level, seed: seed))
+        if let ground = surfaceBelow(anchor, level: level) {
+            candidates.append(CGPoint(x: anchor.x, y: ground.y - 70))
+            candidates.append(CGPoint(x: anchor.x, y: ground.y - 48))
+            candidates.append(CGPoint(x: ground.x, y: ground.y - 60))
+        }
+        for c in candidates where collectible(c, level: level, phase: phase, period: period) {
+            return c
+        }
+        // Nothing passed. Say so rather than shipping a coin nobody can reach.
+        print("[Mossgate:COIN] no collectible position for coin \(index) in \(level.name)")
+        return candidates.first ?? anchor
+    }
+
+    /// The coin layout for a gate.
+    ///
+    /// One definition, so the scene and the tests cannot disagree about where the
+    /// coins are: the runner's route where it can finish the gate, ballistic probes
+    /// where it cannot, and a nudge of the authored position as the last resort.
+    static func coinLayout(level: Level, phase: [CGFloat], period: [CGFloat],
+                           seed: Int) -> (coins: [CGPoint], source: String) {
+        let run = route(level: level, phase: phase, period: period)
+        if !run.isEmpty {
+            let placed = coins(run, count: level.coins.count,
+                               seed: seed &+ level.id, level: level)
+            // A route point can still be out of pickup range, so every sampled coin
+            // goes through the same proof rather than being trusted for coming off
+            // the route.
+            if placed.count == level.coins.count {
+                let checked = placed.enumerated().map { i, c -> CGPoint in
+                    collectible(c, level: level, phase: phase, period: period)
+                        ? c
+                        : placeCoin(anchor: c, index: i, level: level,
+                                    phase: phase, period: period,
+                                    seed: seed &+ i &* 977)
+                }
+                return (checked, "runner")
+            }
+        }
+        let out = level.coins.enumerated().map { i, c -> CGPoint in
+            placeCoin(anchor: CGPoint(x: c.x, y: c.y), index: i, level: level,
+                      phase: phase, period: period, seed: seed &+ i &* 977)
+        }
+        return (out, "probe")
+    }
+
     // MARK: - Coins from the route
 
     /// A single jump clears about 120 units, so a coin higher than this above the

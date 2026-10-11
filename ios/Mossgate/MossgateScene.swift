@@ -280,6 +280,37 @@ final class MossgateScene: SKScene {
 
         runAutopilotTestIfRequested()
         runLevelGenTestIfRequested()
+        runCoinTestIfRequested()
+    }
+
+    /// Test hook: `-TestCoins 1` checks every PLACED coin against the game's own
+    /// pickup rule, so "can this be collected" is measured rather than assumed from
+    /// the placement maths looking right.
+    private func runCoinTestIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestCoins") else { return }
+        let seed = SettingsStore.shared.runSeed
+        let gates = Levels.build(seed: seed)
+        var all = 0
+        var bad = 0
+        for g in gates {
+            let t = Self.moverTiming(for: g, seed: seed)
+            let layout = Autopilot.coinLayout(level: g, phase: t.phase,
+                                              period: t.period, seed: seed)
+            var unreachable: [Int] = []
+            var highest: CGFloat = 0
+            for (i, c) in layout.coins.enumerated() {
+                if let h = Autopilot.heightAboveGround(of: c, in: g) { highest = max(highest, h) }
+                if !Autopilot.collectible(c, level: g, phase: t.phase, period: t.period) {
+                    unreachable.append(i)
+                }
+            }
+            all += layout.coins.count
+            bad += unreachable.count
+            let flag = unreachable.isEmpty ? "ok" : "UNREACHABLE \(unreachable)"
+            print("[Mossgate:COIN] world \(g.world) key \(g.id) \"\(g.name)\" src=\(layout.source) "
+                  + "coins=\(layout.coins.count) highest=\(Int(highest)) \(flag)")
+        }
+        print("[Mossgate:COIN] TOTAL coins=\(all) unreachable=\(bad) seed=\(seed)")
     }
 
     /// Test hook: `-TestLevelGen 1` builds every gate for this run seed and reports
@@ -699,35 +730,13 @@ final class MossgateScene: SKScene {
         let key = "\(levelIndex)-\(SettingsStore.shared.runSeed)"
         if let cached = coinRouteCache[key] { return cached }
 
-        let route = Autopilot.route(level: level,
-                                    phase: moverPhaseOffset,
-                                    period: moverPeriodScale)
-        var out: [CGPoint] = []
-        coinSource = "authored"
-        if !route.isEmpty {
-            let placed = Autopilot.coins(route, count: level.coins.count,
-                                         seed: SettingsStore.shared.runSeed &+ level.id,
-                                         level: level)
-            if placed.count == level.coins.count {
-                out = placed
-                coinSource = "runner"
-            }
-        }
-        if out.isEmpty {
-            // The runner could not finish this level, so prove each coin
-            // individually instead: launch the real physics from the ground under
-            // the authored position and put the coin wherever the launch went.
-            // Narrower than a full route, but it holds for every level.
-            out = level.coins.enumerated().map { i, c in
-                Autopilot.variedCoin(near: CGPoint(x: c.x, y: c.y), level: level,
-                                     phase: moverPhaseOffset, period: moverPeriodScale,
-                                     seed: SettingsStore.shared.runSeed &+ i &* 977)
-                ?? variedPickup(x: c.x, y: c.y, index: i)
-            }
-            coinSource = "probe"
-        }
-        coinRouteCache[key] = out
-        return out
+        let layout = Autopilot.coinLayout(level: level,
+                                          phase: moverPhaseOffset,
+                                          period: moverPeriodScale,
+                                          seed: SettingsStore.shared.runSeed)
+        coinSource = layout.source
+        coinRouteCache[key] = layout.coins
+        return layout.coins
     }
 
     /// Nudges a pickup to a per-run position, rejected if the new spot would sit

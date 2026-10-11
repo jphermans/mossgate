@@ -31,6 +31,12 @@ struct RootView: View {
             case .title:
                 TitleView(
                     onStartLevel: { idx in
+                        // The title screen already refuses, but a locked gate must not
+                        // be reachable by any other caller either.
+                        guard SettingsStore.shared.gateUnlocked(idx) else {
+                            SettingsStore.shared.notice = "That gate is still locked."
+                            return
+                        }
                         gameLevelIndex = idx
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
                     },
@@ -212,14 +218,13 @@ struct RootView: View {
 
     /// Whether the next gate can actually be played.
     ///
-    /// This is the paywall's third door. The title screen refuses to open a locked
-    /// world, but "Next gate" used to walk straight into one — so finishing the free
-    /// world handed over the paid world for free.
+    /// This is the paywall's third door, and now the progression's second. The title
+    /// screen refuses to open a locked world or a locked gate, but "Next gate" used
+    /// to walk straight into either — so finishing the free world handed over the
+    /// paid world for free. Asking the same question in the same place is what stops
+    /// the three doors disagreeing.
     private var nextGatePlayable: Bool {
-        let gates = SettingsStore.shared.gates
-        let next = gameLevelIndex + 1
-        guard gates.indices.contains(next) else { return false }
-        return SettingsStore.shared.worldUnlocked(gates[next].world)
+        SettingsStore.shared.gateUnlocked(gameLevelIndex + 1)
     }
 
     /// Leave the level and go back to the gates.

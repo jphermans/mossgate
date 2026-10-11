@@ -76,6 +76,27 @@ final class SettingsStore: ObservableObject {
         return (0..<world).allSatisfy { worldComplete($0) }
     }
 
+    /// Whether a gate can be played.
+    ///
+    /// Two rules stacked: its world has to be open, and within the world the gates
+    /// are taken in order — each one opens when the one before it is cleared. The
+    /// first gate of a world needs no ancestor, only the world itself.
+    func gateUnlocked(_ key: Int) -> Bool {
+        let world = Levels.world(of: key)
+        let slot = Levels.slot(of: key)
+        guard worldUnlocked(world) else { return false }
+        if slot == 0 { return true }
+        let previous = key - 1
+        guard previous >= 0, previous < cleared.count else { return false }
+        return cleared[previous]
+    }
+
+    /// Why a gate cannot be played yet, or nil when it can. Shown on its row.
+    func gateLockReason(_ key: Int) -> String? {
+        if gateUnlocked(key) { return nil }
+        return "Finish the gate before it"
+    }
+
     /// Why a world cannot be played yet, or nil when it can. Shown on its card.
     func worldLockReason(_ world: Int) -> String? {
         if worldUnlocked(world) { return nil }

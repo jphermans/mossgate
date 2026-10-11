@@ -185,35 +185,49 @@ struct TitleView: View {
             if isOpen {
                 VStack(spacing: 6) {
                     ForEach(gates, id: \.id) { level in
-                        Button { onStartLevel(level.id) } label: {
+                        let open = settings.gateUnlocked(level.id)
+                        Button {
+                            guard open else {
+                                settings.notice = "Finish the gate before it to open this one."
+                                return
+                            }
+                            onStartLevel(level.id)
+                        } label: {
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(level.name)
                                         .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(Color("MossgateCream"))
-                                    Text(level.blurb)
+                                        .foregroundStyle(open ? Color("MossgateCream")
+                                                              : Color("MossgateMuted"))
+                                    Text(open ? level.blurb : "Finish the gate before it.")
                                         .font(.system(size: 11))
                                         .foregroundStyle(Color("MossgateMuted"))
                                         .multilineTextAlignment(.leading)
                                 }
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
-                                    if settings.cleared[level.id] {
-                                        Text("CLEAR")
-                                            .font(.system(size: 10, weight: .heavy))
-                                            .tracking(2)
-                                            .foregroundStyle(Color("MossgateLantern"))
+                                    if !open {
+                                        Image(systemName: "lock.fill")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(Color("MossgateMuted"))
+                                    } else {
+                                        if settings.cleared[level.id] {
+                                            Text("CLEAR")
+                                                .font(.system(size: 10, weight: .heavy))
+                                                .tracking(2)
+                                                .foregroundStyle(Color("MossgateLantern"))
+                                        }
+                                        Text("\(settings.bestCoins[level.id])/\(level.coins.count)")
+                                            .font(.system(size: 12, design: .monospaced))
+                                            .foregroundStyle(Color("MossgateMuted"))
                                     }
-                                    Text("\(settings.bestCoins[level.id])/\(level.coins.count)")
-                                        .font(.system(size: 12, design: .monospaced))
-                                        .foregroundStyle(Color("MossgateMuted"))
                                 }
                             }
                             .padding(.vertical, 10)
                             .padding(.horizontal, 12)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .fill(Color("MossgateSurface").opacity(0.6))
+                                    .fill(Color("MossgateSurface").opacity(open ? 0.6 : 0.35))
                             )
                         }
                     }
