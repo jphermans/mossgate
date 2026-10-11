@@ -33,12 +33,16 @@ final class AudioEngine {
     }
 
     private func configureSession() {
-        do {
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
-            try session.setActive(true)
-        } catch {
-            print("[Mossgate:Audio] AVAudioSession error: \(error)")
+        // iOS 18+ warns when AVAudioSession setters run on the main thread.
+        // Use the async API so it doesn't block the first frame.
+        let session = AVAudioSession.sharedInstance()
+        Task.detached(priority: .userInitiated) {
+            do {
+                try session.setCategory(.ambient, mode: .default, options: [.mixWithOthers])
+                try session.setActive(true)
+            } catch {
+                print("[Mossgate:Audio] AVAudioSession error: \(error)")
+            }
         }
     }
 

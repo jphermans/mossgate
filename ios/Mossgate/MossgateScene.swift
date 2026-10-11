@@ -74,7 +74,7 @@ final class MossgateScene: SKScene {
     private var particleLayer = SKNode()
 
     // Camera + scaling
-    private var cameraNode: SKCameraNode!
+    private let cameraNode = SKCameraNode()
     private var viewScale: CGFloat = 1.0  // world units per point
 
     // Texture cache
@@ -107,11 +107,11 @@ final class MossgateScene: SKScene {
         backgroundColor = UIColor(named: "MossgateDusk") ?? UIColor(red: 12/255, green: 28/255, blue: 31/255, alpha: 1)
         view.ignoresSiblingOrder = true
         scaleMode = .resizeFill
-        cameraNode = SKCameraNode()
-        addChild(cameraNode)
-        addChild(worldNode)
-        addChild(particleLayer)
         camera = cameraNode
+        // addChild is idempotent — re-attach safely if SwiftUI re-presents this scene.
+        if cameraNode.parent !== self { addChild(cameraNode) }
+        if worldNode.parent !== self { addChild(worldNode) }
+        if particleLayer.parent !== self { addChild(particleLayer) }
 
         loadTextures()
         addChild(hudNode)
