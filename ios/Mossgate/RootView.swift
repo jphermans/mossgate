@@ -50,8 +50,11 @@ struct RootView: View {
         // appears. Medium detents so it doesn't cover the full screen.
         .sheet(isPresented: $showSetup) {
             SetupView(onDone: { showSetup = false })
-                .presentationDetents([.medium, .large])
+                .presentationDetents(Self.setupDetents)
                 .presentationDragIndicator(.visible)
+        }
+        .onReceive(SettingsStore.shared.$controllerOn) { on in
+            session.scene?.setControllerEnabled(on)
         }
         .onChange(of: phase) { _, newValue in
             AppDelegate.orientationLock = (newValue == .splash) ? .portrait : .landscape
@@ -61,6 +64,7 @@ struct RootView: View {
             }
         }
         .onAppear {
+                    wireController()
                     AppDelegate.orientationLock = .portrait
                     let args = ProcessInfo.processInfo.arguments
                     // Test hook: -OpenSetup 1 lands on the title screen with the
@@ -97,6 +101,9 @@ struct RootView: View {
         ZStack {
             MossgateGameView(levelIndex: gameLevelIndex, session: session, hud: $hud)
                 .ignoresSafeArea()
+                .onAppear {
+                    session.scene?.setControllerEnabled(SettingsStore.shared.controllerOn)
+                }
             GameControlsView(touch: touch, onSceneRef: { _ in })
             // Keep the HUD up while dead/win/game over so the light counter is
             // actually visible at the moment it drops. The pause button only
@@ -138,6 +145,31 @@ struct RootView: View {
     }
 
     // MARK: - Helpers
+
+    /// Detents for the Setup sheet.
+    ///
+    /// -SetupLarge 1 collapses it to a single tall detent, which is how the
+    /// controller section (below the fold at medium height) gets photographed in
+    /// tests. A `selection:` binding set before presentation is ignored — SwiftUI
+    /// presents at the first detent in the list — so the list itself has to change.
+    private static var setupDetents: Set<PresentationDetent> {
+        ProcessInfo.processInfo.arguments.contains("-SetupLarge") ? [.large] : [.medium, .large]
+    }
+
+    /// External controller wiring. One place owns the GamepadManager callbacks,
+    /// so there is a single writer for the device list the Setup screen shows.
+    private func wireController() {
+        let pad = GamepadManager.shared
+        pad.onInput = { input in
+            session.scene?.setGamepad(left: input.left, right: input.right,
+                                      jump: input.jump, down: input.down)
+        }
+        pad.onMenu = { session.scene?.pause() }
+        pad.onDevicesChanged = { names in
+            DispatchQueue.main.async { ControllerList.shared.names = names }
+        }
+        pad.start()
+    }
 
     private func topViewController() -> UIViewController? {
         guard let window = UIApplication.shared.connectedScenes

@@ -48,12 +48,30 @@ final class MossgateScene: SKScene {
     private var checkpointSnap: (point: CGPoint, coins: [Int], cp: Int)?
 
     // Touch state
+    // On-screen pad state
     private var touchLeft = false
     private var touchRight = false
     private var touchJump = false
     private var touchDown = false
-    private var touchDrop = false
+    /// One-shot "step off the ledge". Shared by the pad and a controller — a
+    /// drop request is a drop request, wherever it came from.
+    private var dropRequested = false
     private var prevJump = false
+
+    // External controller state. Deliberately separate from the pad so a finger
+    // on the screen and a thumbstick cannot cancel each other out.
+    private var padLeft = false
+    private var padRight = false
+    private var padJump = false
+    private var padDown = false
+    /// Controller input is gated by the Setup toggle.
+    private var controllerEnabled = true
+
+    /// Effective input: on-screen pad OR controller.
+    private var inLeft: Bool { touchLeft || (controllerEnabled && padLeft) }
+    private var inRight: Bool { touchRight || (controllerEnabled && padRight) }
+    private var inJump: Bool { touchJump || (controllerEnabled && padJump) }
+    private var inDown: Bool { touchDown || (controllerEnabled && padDown) }
 
     // Camera
     private var camX: CGFloat = 0
@@ -471,6 +489,7 @@ final class MossgateScene: SKScene {
         runMoverTestIfRequested()
         runDeathTestHookIfRequested()
         runDownTestHookIfRequested()
+        runGamepadTestHookIfRequested()
         runDropTestHookIfRequested()
         runSfxTestHookIfRequested()
     }
@@ -620,6 +639,61 @@ final class MossgateScene: SKScene {
         }
     }
 
+    /// Test hook: `-TestGamepad 1` exercises controller input with no hardware
+    /// attached. First prints the pure button mapping, then drives `setGamepad`
+    /// and measures what actually changes in the physics.
+    func runGamepadTestHookIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestGamepad") else { return }
+
+        let cases: [(String, GamepadManager.Snapshot)] = [
+            ("stick right        ", GamepadManager.Snapshot(stickX: 0.9)),
+            ("stick left         ", GamepadManager.Snapshot(stickX: -0.9)),
+            ("stick in dead zone ", GamepadManager.Snapshot(stickX: 0.2)),
+            ("A (jump)           ", GamepadManager.Snapshot(a: true)),
+            ("B (down)           ", GamepadManager.Snapshot(b: true)),
+            ("d-pad up (jump)    ", GamepadManager.Snapshot(dpadUp: true)),
+            ("stick pulled down  ", GamepadManager.Snapshot(stickY: -0.8)),
+            ("menu               ", GamepadManager.Snapshot(menu: true)),
+        ]
+        for (label, snap) in cases {
+            let i = GamepadManager.map(snap)
+            print("[Mossgate:PAD] \(label) -> left=\(i.left) right=\(i.right) "
+                  + "jump=\(i.jump) down=\(i.down) menu=\(i.menu)")
+        }
+
+        // Controller input must reach the physics, not just the flags.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self else { return }
+            self.placePlayer(at: self.level.spawn)
+            self.playerVx = 0
+            let x0 = self.playerX
+            self.setGamepad(right: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self else { return }
+                let moved = self.playerX - x0
+                self.setGamepad(right: false)
+                print("[Mossgate:PAD] stick right 0.6s moved the player \(Int(moved)) units")
+                // And controller DOWN must fire the same ledge drop as the pad.
+                guard let ow = self.level.solids.first(where: { $0.oneway }) else {
+                    print("[Mossgate:PAD] no one-way ledge in this level to test the drop")
+                    return
+                }
+                self.playerX = ow.x + ow.w / 2 - Phys.playerW / 2
+                self.playerY = ow.y - Phys.playerH - 2
+                self.playerVy = 0
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    let yBefore = self.playerY
+                    self.setGamepad(down: true)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        self.setGamepad(down: false)
+                        print("[Mossgate:PAD] controller DOWN on a ledge: y \(Int(yBefore)) -> "
+                              + "\(Int(self.playerY)) fell=\(Int(self.playerY - yBefore))")
+                    }
+                }
+            }
+        }
+    }
+
     /// Test hook: `-TestDeath 1` kills the player repeatedly and logs the light
     /// counter and state after each death, so the lose-light → game-over flow
     /// can be checked headlessly instead of by hand.
@@ -700,10 +774,31 @@ final class MossgateScene: SKScene {
             // firing the one-shot on the rising edge, otherwise a plain tap of
             // DOWN only sets the *held* state, which is read solely inside
             // tryJump() — and that bails out unless a jump was queued.
-            if v && !touchDown { touchDrop = true }
+            if v && !touchDown { dropRequested = true }
             touchDown = v
         }
-        if let v = drop { if v { touchDrop = true } }
+        if let v = drop { if v { dropRequested = true } }
+    }
+
+    /// External controller input. Mirrors `setTouch` so both sources feed the
+    /// same physics; the scene ORs them via `inLeft`/`inRight`/`inJump`/`inDown`.
+    func setGamepad(left: Bool? = nil, right: Bool? = nil,
+                    jump: Bool? = nil, down: Bool? = nil) {
+        if let v = left { padLeft = v }
+        if let v = right { padRight = v }
+        if let v = jump { padJump = v }
+        if let v = down {
+            if v && !padDown { dropRequested = true }   // same rising-edge one-shot
+            padDown = v
+        }
+    }
+
+    /// Setup toggle: ignore controller input when off.
+    func setControllerEnabled(_ on: Bool) {
+        controllerEnabled = on
+        if !on {
+            padLeft = false; padRight = false; padJump = false; padDown = false
+        }
     }
 
     private func loadLevel(index: Int, toState: GameState) {
@@ -931,10 +1026,10 @@ final class MossgateScene: SKScene {
         // the same size instead of depending on where the player happens to sit
         // inside the dead zone. Gives the pad a visible job on solid ground, and
         // a way to see what waits below before dropping through a ledge.
-        let peekTarget: CGFloat = (touchDown && grounded) ? Phys.lookDown : 0
+        let peekTarget: CGFloat = (inDown && grounded) ? Phys.lookDown : 0
         peekY += (peekTarget - peekY) * (1 - exp(-9 * dt))
 
-        let jumpDown = touchJump
+        let jumpDown = inJump
         if jumpDown && !prevJump { buffer = Phys.buffer }
         let released = prevJump && !jumpDown
         prevJump = jumpDown
@@ -978,7 +1073,7 @@ final class MossgateScene: SKScene {
         if abs(playerVy) < Phys.apex { g = Phys.gApex }
         // DOWN held while descending = dive. Gated on `playerVy > 0` so it
         // only ever speeds the fall up; it never shortens a jump.
-        let diving = touchDown && !grounded && playerVy > 0
+        let diving = inDown && !grounded && playerVy > 0
         if diving { g *= Phys.diveGravity }
         let terminal = diving ? Phys.maxFall * Phys.diveMaxFall : Phys.maxFall
         playerVy = min(terminal, playerVy + g * dt)
@@ -1099,14 +1194,14 @@ final class MossgateScene: SKScene {
 
     private func moveXDirection() -> CGFloat {
         var x: CGFloat = 0
-        if touchLeft { x -= 1 }
-        if touchRight { x += 1 }
+        if inLeft { x -= 1 }
+        if inRight { x += 1 }
         return max(-1, min(1, x))
     }
 
     private func tryDrop() {
-        guard touchDrop else { return }
-        touchDrop = false
+        guard dropRequested else { return }
+        dropRequested = false
         if grounded && (groundKind == "oneway" || groundKind == "mover") {
             dropTimer = 0.18
             grounded = false
@@ -1126,7 +1221,7 @@ final class MossgateScene: SKScene {
 
     private func tryJump() {
         if buffer <= 0 { return }
-        if touchDown {
+        if inDown {
             if grounded && (groundKind == "oneway" || groundKind == "mover") {
                 dropTimer = 0.18
                 grounded = false; groundKind = "none"; ride = -1; coyote = 0

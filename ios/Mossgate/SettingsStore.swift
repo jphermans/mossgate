@@ -19,6 +19,13 @@ final class SettingsStore: ObservableObject {
         didSet { UserDefaults.standard.set(sfxVolume, forKey: "sfxVolume") }
     }
 
+    /// Use a paired game controller. On by default — a pad is strictly better
+    /// than the on-screen buttons, but the toggle lets someone turn it off if a
+    /// drifting stick is causing trouble.
+    @Published var controllerOn: Bool {
+        didSet { UserDefaults.standard.set(controllerOn, forKey: "controllerOn") }
+    }
+
     /// Per-level progress (cleared + best coin count), persisted across launches.
     @Published var cleared: [Bool]
     @Published var bestCoins: [Int]
@@ -34,6 +41,7 @@ final class SettingsStore: ObservableObject {
         self.sfxOn = UserDefaults.standard.object(forKey: "sfxOn") as? Bool ?? true
         self.soundVolume = UserDefaults.standard.object(forKey: "soundVolume") as? Double ?? 0.5
         self.sfxVolume = UserDefaults.standard.object(forKey: "sfxVolume") as? Double ?? 0.7
+        self.controllerOn = UserDefaults.standard.object(forKey: "controllerOn") as? Bool ?? true
 
         self.lives = UserDefaults.standard.object(forKey: "lives") as? Int ?? SettingsStore.maxLives
 

@@ -4,6 +4,7 @@ import SwiftUI
 struct SetupView: View {
     let onDone: () -> Void
     @ObservedObject private var settings = SettingsStore.shared
+    @ObservedObject private var controllers = ControllerList.shared
     @State private var showResetConfirm = false
 
     var body: some View {
@@ -58,6 +59,10 @@ struct SetupView: View {
                         Divider()
                             .background(Color("MossgateBorder"))
                             .padding(.vertical, 4)
+                        controllerSection
+                        Divider()
+                            .background(Color("MossgateBorder"))
+                            .padding(.vertical, 4)
                         Button(role: .destructive) {
                             showResetConfirm = true
                         } label: {
@@ -78,6 +83,12 @@ struct SetupView: View {
                     }
                     .padding(.horizontal, 22)
                 }
+                // -SetupLarge 1 also scrolls to the bottom, which is the only way
+                // to reach the controller section in a headless screenshot (no
+                // gesture input). Default anchor is unchanged otherwise.
+                .defaultScrollAnchor(
+                    ProcessInfo.processInfo.arguments.contains("-SetupLarge") ? .bottom : .top
+                )
             }
         }
         .alert("Reset all progress?", isPresented: $showResetConfirm) {
@@ -91,6 +102,56 @@ struct SetupView: View {
         }
     }
 
+    /// External controller support: the toggle, what's connected, and the button
+    /// mapping so a pad is usable without a manual.
+    private var controllerSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            toggleRow(
+                title: "Game controller",
+                blurb: controllers.names.isEmpty
+                    ? "No controller connected"
+                    : controllers.names.joined(separator: ", "),
+                // Must be the real Published binding. A hand-rolled
+                // Binding(get:set:) here had SwiftUI push its stale internal
+                // value back through `set` on the first render, which flipped
+                // this to false on launch and silently disabled controller input.
+                isOn: $settings.controllerOn
+            )
+            if settings.controllerOn {
+                if controllers.names.isEmpty {
+                    Text("Pair one in iOS Settings › Bluetooth. Mossgate picks it up on its own — nothing to configure here.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color("MossgateMuted"))
+                        .padding(.horizontal, 4)
+                }
+                VStack(spacing: 6) {
+                    mappingRow("Jump", "A  ·  d-pad up")
+                    mappingRow("Down", "B  ·  d-pad down  ·  stick down")
+                    mappingRow("Move", "left stick  ·  d-pad")
+                    mappingRow("Pause", "Menu  ·  Options")
+                }
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color("MossgateSurface").opacity(0.6))
+                )
+            }
+        }
+    }
+
+    private func mappingRow(_ label: String, _ keys: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(label)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color("MossgateCream"))
+                .frame(width: 54, alignment: .leading)
+            Text(keys)
+                .font(.system(size: 12))
+                .foregroundStyle(Color("MossgateMuted"))
+            Spacer()
+        }
+    }
+
     private var duskGradient: some View {
         LinearGradient(colors: [
             Color(red: 0.027, green: 0.078, blue: 0.086),
@@ -101,7 +162,6 @@ struct SetupView: View {
         .ignoresSafeArea()
         .opacity(0.6)
     }
-
     private func toggleRow(title: String, blurb: String, isOn: Binding<Bool>) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
