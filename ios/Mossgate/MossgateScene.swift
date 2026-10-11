@@ -454,6 +454,29 @@ final class MossgateScene: SKScene {
     func startLevel(_ index: Int) {
         loadLevel(index: index, toState: .play)
         runDropTestHookIfRequested()
+        runSfxTestHookIfRequested()
+    }
+
+    /// Test hook: `-TestSfx 1` fires every sound effect in turn and logs the
+    /// engine state for each, so audio can be checked without a human listening.
+    private func runSfxTestHookIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestSfx") else { return }
+        let seq: [(String, () -> Void)] = [
+            ("tap",        { AudioEngine.shared.tap() }),
+            ("jump",       { AudioEngine.shared.jump(false) }),
+            ("doubleJump", { AudioEngine.shared.jump(true) }),
+            ("coin",       { AudioEngine.shared.coin() }),
+            ("checkpoint", { AudioEngine.shared.checkpoint() }),
+            ("land",       { AudioEngine.shared.land() }),
+            ("die",        { AudioEngine.shared.die() }),
+            ("win",        { AudioEngine.shared.win() }),
+        ]
+        for (i, item) in seq.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5 + Double(i) * 0.6) {
+                print("[Mossgate:AUDIO] firing \(item.0)")
+                item.1()
+            }
+        }
     }
 
     /// Test hook: `-TestDrop 1` parks the player on the level's first one-way
@@ -1058,7 +1081,7 @@ final class MossgateScene: SKScene {
         // DEBUG
         if Int(time * 4) != lastDebugFrame {
             lastDebugFrame = Int(time * 4)
-            print("[Mossgate] frame: sceneSize=\(size) viewScale=\(viewScale) camY=\(camY) worldNode.pos=\(worldNode.position)")
+            print("[Mossgate] frame: sceneSize=\(size) viewScale=\(viewScale) camY=\(camY)")
         }
     }
     private var lastDebugFrame: Int = -1
@@ -1090,8 +1113,16 @@ final class MossgateScene: SKScene {
         playerNode.xScale = facing
         playerNode.yScale = -1   // keep the counter-flip from addWorldChild
 
-        // Coin spin & bob
-        for (i, node) in coinNodes.enumerated() where !coinsGot.contains(i) {
+        // Coin spin & bob. The old code showed the uncollected coins and then
+        // ran `for node in coinNodes where !node.isHidden { node.isHidden = true }`,
+        // which matched every coin the previous pass had just revealed and hid
+        // them again — so no coin was ever drawn.
+        for (i, node) in coinNodes.enumerated() {
+            if coinsGot.contains(i) {
+                node.isHidden = true
+                continue
+            }
+            node.isHidden = false
             let frame = (coinFrames.isEmpty ? 0 : Int(time * 8) % coinFrames.count)
             node.texture = coinFrames[safe: frame] ?? node.texture
             let bob = sin(time * 3.2 + CGFloat(i)) * 3
@@ -1099,9 +1130,27 @@ final class MossgateScene: SKScene {
                 let c = level.coins[i]
                 node.position = CGPoint(x: c.x * viewScale, y: (c.y + bob) * viewScale)
             }
-            node.isHidden = false
         }
-        for node in coinNodes where !node.isHidden { node.isHidden = true }
+
+        // Lanterns — gentle pulse + bob so they read as the pickups they are,
+        // and hidden once collected (previously they stayed on screen forever).
+        for (i, node) in lanternNodes.enumerated() {
+            if lanternsGot.contains(i) {
+                node.isHidden = true
+                continue
+            }
+            node.isHidden = false
+            let phase = time * 2.6 + CGFloat(i) * 1.3
+            let pulse = 1.0 + 0.12 * sin(phase)
+            let s = 40 * viewScale * pulse
+            node.size = CGSize(width: s, height: s)
+            node.alpha = 0.82 + 0.18 * sin(phase)
+            if i < level.lanterns.count {
+                let l = level.lanterns[i]
+                let bob = sin(time * 1.8 + CGFloat(i)) * 4
+                node.position = CGPoint(x: l.x * viewScale, y: (l.y + bob) * viewScale)
+            }
+        }
 
         // Flag
         if !flagFrames.isEmpty {

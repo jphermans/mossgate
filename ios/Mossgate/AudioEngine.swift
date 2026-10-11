@@ -102,6 +102,9 @@ final class AudioEngine {
             if !self.engine.isRunning {
                 Thread.sleep(forTimeInterval: 0.05)
             }
+            if ProcessInfo.processInfo.arguments.contains("-TestSfx") {
+                print("[Mossgate:AUDIO] schedule frames=\(buffer.frameLength) running=\(self.engine.isRunning) mixerVol=\(self.sfxMixer.outputVolume) nodeVol=\(self.sfxNode.volume) formatCh=\(buffer.format.channelCount)")
+            }
             self.sfxNode.scheduleBuffer(buffer, completionHandler: nil)
         }
     }
