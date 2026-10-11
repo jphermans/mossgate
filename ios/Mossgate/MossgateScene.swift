@@ -111,6 +111,13 @@ final class MossgateScene: SKScene {
         backgroundColor = UIColor(named: "MossgateDusk") ?? UIColor(red: 12/255, green: 28/255, blue: 31/255, alpha: 1)
         view.ignoresSiblingOrder = true
         scaleMode = .resizeFill
+        // Top-left origin: scene (0, 0) = top-left corner of the scene buffer.
+        // Combined with scene.size (720, 360) and worldNode.position = (-camX, -camY),
+        // the world region [camX, camX+720] x [camY, camY+360] maps directly onto
+        // the scene buffer [0, 720] x [0, 360]. The default anchorPoint (0.5, 0.5)
+        // would put scene (0, 0) at the center, which means our top-left world
+        // origin would render BELOW the scene bottom — everything off-screen.
+        anchorPoint = CGPoint(x: 0, y: 0)
         camera = cameraNode
         // addChild is idempotent — re-attach safely if SwiftUI re-presents this scene.
         if cameraNode.parent !== self { addChild(cameraNode) }

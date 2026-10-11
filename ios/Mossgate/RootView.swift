@@ -53,14 +53,24 @@ struct RootView: View {
             }
         }
         .onAppear {
-            AppDelegate.orientationLock = .portrait
-            if UserDefaults.standard.bool(forKey: "SkipSplash") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    withAnimation(.easeInOut(duration: 0.35)) { phase = .title }
+                    AppDelegate.orientationLock = .portrait
+                    let args = ProcessInfo.processInfo.arguments
+                    // Test hook: -SkipSplash 1 skips past the splash screen.
+                    // Optional second arg -StartInLevel N jumps straight into level N (test rigs).
+                    if let i = args.firstIndex(of: "-StartInLevel"),
+                       i + 1 < args.count,
+                       let idx = Int(args[i + 1]),
+                       idx < Levels.all.count {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            gameLevelIndex = idx
+                            phase = .game
+                        }
+                    } else if UserDefaults.standard.bool(forKey: "SkipSplash") {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            withAnimation(.easeInOut(duration: 0.35)) { phase = .title }
+                        }
+                    }
                 }
-            }
-            // Test hook: -SkipSplash 1 skips past the splash screen.
-        }
     }
 
     // MARK: - Game stack
