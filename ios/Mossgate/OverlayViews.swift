@@ -210,6 +210,12 @@ struct OverlayPanel: View {
     let onRetry: (() -> Void)?
     let onQuit: () -> Void
     let onNext: (() -> Void)?
+    /// Name of the world whose LAST gate was just cleared — the moment a world
+    /// becomes finished. Nil when the gate cleared was not the final one.
+    var worldJustCompleted: String? = nil
+    /// The next world exists but is not playable (not bought, or an earlier world
+    /// is unfinished), so no "Next" button is offered.
+    var nextWorldLocked: Bool = false
 
     /// Running out of light is now its own state rather than a relabelled death.
     private var isGameOver: Bool { phase == .gameOver }
@@ -227,6 +233,13 @@ struct OverlayPanel: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 18)
                 }
+                if nextWorldLocked {
+                    Text("Every gate in this world is done. The next one is locked \u{2014} open it from the gates.")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color("MossgateLantern"))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 18)
+                }
                 VStack(spacing: 8) {
                     if let onRetry {
                         primaryButton(action: {
@@ -239,7 +252,7 @@ struct OverlayPanel: View {
                     }
                     if let onNext = onNext {
                         Button(action: onNext) {
-                            Text("Next gate")
+                            Text(worldJustCompleted == nil ? "Next gate" : "Next world")
                                 .font(.system(size: 15, weight: .semibold))
                                 .frame(maxWidth: .infinity, minHeight: 46)
                                 .foregroundStyle(Color("MossgateCream"))
@@ -292,7 +305,12 @@ struct OverlayPanel: View {
         switch phase {
         case .pause: return hud.levelName
         case .dead:  return "The wick went out. \(hud.lives) of \(hud.maxLives) left."
-        case .win:   return "\(hud.coins) of \(hud.total) coins."
+        case .win:
+            let coins = "\(hud.coins) of \(hud.total) coins."
+            if let world = worldJustCompleted {
+                return "\(world) is finished \u{2014} every gate open. \(coins)"
+            }
+            return coins
         default:     return nil
         }
     }
@@ -301,7 +319,7 @@ struct OverlayPanel: View {
         switch phase {
         case .pause: return "PAUSED"
         case .dead:  return "WICK OUT"
-        case .win:   return "GATE OPEN"
+        case .win:   return worldJustCompleted == nil ? "GATE OPEN" : "WORLD COMPLETE"
         default:     return ""
         }
     }
@@ -310,7 +328,10 @@ struct OverlayPanel: View {
         switch phase {
         case .pause: return "Paused"
         case .dead:  return "Try again"
-        case .win:   return "Mossgate yields"
+        case .win:
+            // Finishing a whole world is a bigger moment than opening one gate,
+            // and it is the moment the next world becomes reachable — so it says so.
+            return worldJustCompleted == nil ? "Mossgate yields" : "Every gate open"
         default:     return ""
         }
     }

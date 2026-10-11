@@ -129,6 +129,10 @@ struct TitleView: View {
         let isOpen = unlocked && expandedWorld == world.id
         let gates = settings.gates.filter { $0.world == world.id }
         let clearedCount = gates.filter { settings.cleared[$0.id] }.count
+        // A finished world has to LOOK finished at a glance, not require counting
+        // six ticked rows: it is both the thing you earned and the gate to the next
+        // world, which is exactly what the player is looking for on this screen.
+        let complete = unlocked && settings.worldComplete(world.id)
         return VStack(alignment: .leading, spacing: 8) {
             Button {
                 guard unlocked else { onLockedTap(world); return }
@@ -141,15 +145,23 @@ struct TitleView: View {
                         Text(world.name)
                             .font(.system(size: 17, weight: .semibold))
                             .foregroundStyle(unlocked ? Color("MossgateCream") : Color("MossgateMuted"))
-                        Text(unlocked ? world.blurb : (settings.worldLockReason(world.id) ?? ""))
+                        Text(unlocked ? (complete ? "Every gate cleared." : world.blurb)
+                                      : (settings.worldLockReason(world.id) ?? ""))
                             .font(.system(size: 11))
-                            .foregroundStyle(Color("MossgateMuted"))
+                            .foregroundStyle(complete ? Color("MossgateLantern") : Color("MossgateMuted"))
                     }
                     Spacer()
                     if unlocked {
-                        Text("\(clearedCount)/\(gates.count)")
-                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(Color("MossgateLantern"))
+                        if complete {
+                            Label("COMPLETE", systemImage: "checkmark.seal.fill")
+                                .font(.system(size: 11, weight: .heavy))
+                                .tracking(2)
+                                .foregroundStyle(Color("MossgateLantern"))
+                        } else {
+                            Text("\(clearedCount)/\(gates.count)")
+                                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                                .foregroundStyle(Color("MossgateLantern"))
+                        }
                         Image(systemName: isOpen ? "chevron.up" : "chevron.down")
                             .foregroundStyle(Color("MossgateMuted"))
                     } else {
@@ -162,9 +174,12 @@ struct TitleView: View {
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 14)
-                        .fill(Color("MossgateSurface").opacity(unlocked ? 0.9 : 0.5))
+                        .fill(complete ? Color("MossgateLantern").opacity(0.13)
+                                       : Color("MossgateSurface").opacity(unlocked ? 0.9 : 0.5))
                         .overlay(RoundedRectangle(cornerRadius: 14)
-                            .strokeBorder(Color("MossgateBorder"), lineWidth: 1))
+                            .strokeBorder(complete ? Color("MossgateLantern").opacity(0.65)
+                                                   : Color("MossgateBorder"),
+                                          lineWidth: complete ? 1.5 : 1))
                 )
             }
             if isOpen {

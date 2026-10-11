@@ -1134,6 +1134,11 @@ final class MossgateScene: SKScene {
         print("[Mossgate] loadLevel: solids=\(solidNodes.count) movers=\(moverNodes.count) spikes=\(spikeNodes.count) coins=\(coinNodes.count) checkpoints=\(checkpointNodes.count) flag=\(flagNode != nil) player=\(playerNode != nil) viewScale=\(viewScale) camY=\(camY) moverWorld=\(moverPositions.map { "(\(Int($0.x)),\(Int($0.y)))" }.joined(separator: " ")) moverNode=\(moverNodes.map { "(\(Int($0.position.x)),\(Int($0.position.y)))" }.joined(separator: " "))")
         setState(toState)
         notifyPhase()
+        // Test hook: -WinNow 1 opens the gate immediately, so the win panel can be
+        // photographed without playing the level.
+        if ProcessInfo.processInfo.arguments.contains("-WinNow"), toState == .play {
+            win()
+        }
         // -TestSeed 1: report what the run seed actually changed, so variation is
         // checkable rather than asserted.
         if ProcessInfo.processInfo.arguments.contains("-TestSeed") {

@@ -113,6 +113,18 @@ final class SettingsStore: ObservableObject {
         self.bestCoins = (0..<totalLevels).map { savedBest.indices.contains($0) ? savedBest[$0] : 0 }
 
         self.gates = Levels.build(seed: runSeed)
+
+        // Test hook: -CompleteWorld N marks every gate in world N as cleared, so the
+        // finished-world state can be seen and photographed without playing six
+        // gates. In-memory only — nothing is written to UserDefaults.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-CompleteWorld"), i + 1 < args.count,
+           let w = Int(args[i + 1]) {
+            let base = w * Worlds.gatesPerWorld
+            for k in base..<min(base + Worlds.gatesPerWorld, cleared.count) {
+                cleared[k] = true
+            }
+        }
     }
 
     // MARK: - Light / lives

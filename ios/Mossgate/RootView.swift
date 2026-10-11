@@ -178,9 +178,11 @@ struct RootView: View {
                                }
                              : { session.scene?.retryLevel() },
                     onQuit:   { leaveToMenu() },
-                    onNext:   hud.phase == .win && gameLevelIndex < SettingsStore.shared.gates.count - 1
+                    onNext:   hud.phase == .win && nextGatePlayable
                               ? { session.scene?.nextLevel(); gameLevelIndex += 1 }
-                              : nil
+                              : nil,
+                    worldJustCompleted: justFinishedWorld,
+                    nextWorldLocked: justFinishedWorld != nil && !nextGatePlayable
                 )
             }
         }
@@ -191,6 +193,34 @@ struct RootView: View {
     }
 
     // MARK: - Helpers
+
+    /// The world the loaded gate belongs to.
+    private var currentWorld: World? {
+        let gates = SettingsStore.shared.gates
+        guard gates.indices.contains(gameLevelIndex) else { return nil }
+        let id = gates[gameLevelIndex].world
+        return Worlds.all.first { $0.id == id }
+    }
+
+    /// Name of the world whose final gate was just cleared — the moment a world
+    /// becomes finished. Nil the rest of the time.
+    private var justFinishedWorld: String? {
+        guard hud.phase == .win, let world = currentWorld,
+              SettingsStore.shared.worldComplete(world.id) else { return nil }
+        return world.name
+    }
+
+    /// Whether the next gate can actually be played.
+    ///
+    /// This is the paywall's third door. The title screen refuses to open a locked
+    /// world, but "Next gate" used to walk straight into one — so finishing the free
+    /// world handed over the paid world for free.
+    private var nextGatePlayable: Bool {
+        let gates = SettingsStore.shared.gates
+        let next = gameLevelIndex + 1
+        guard gates.indices.contains(next) else { return false }
+        return SettingsStore.shared.worldUnlocked(gates[next].world)
+    }
 
     /// Leave the level and go back to the gates.
     ///
