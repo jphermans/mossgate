@@ -1,6 +1,25 @@
+# Node / web app
 node_modules
 dist
 .vercel
 .env
 .env.*
 *.log
+.npm
+.cache
+
+# iOS / Xcode
+ios/Mossgate.xcodeproj/xcuserdata
+ios/Mossgate.xcodeproj/project.xcworkspace/xcuserdata
+ios/build
+ios/DerivedData
+ios/.build
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Apple tooling artefacts
+.DS_Store
+
+# Local scratch / not part of the app
+ios-game/
