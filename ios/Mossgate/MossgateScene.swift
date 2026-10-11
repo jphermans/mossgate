@@ -58,6 +58,8 @@ final class MossgateScene: SKScene {
     // Camera
     private var camX: CGFloat = 0
     private var camY: CGFloat = 0
+    /// Extra downward camera offset while DOWN is held on solid ground.
+    private var peekY: CGFloat = 0
     private var trauma: CGFloat = 0
 
     // Hint system
@@ -456,6 +458,7 @@ final class MossgateScene: SKScene {
         runMoverTestIfRequested()
         runPlaceAtHookIfRequested()
         runDeathTestHookIfRequested()
+        runDownTestHookIfRequested()
         runDropTestHookIfRequested()
         runSfxTestHookIfRequested()
     }
@@ -567,6 +570,54 @@ final class MossgateScene: SKScene {
     }
 
     func retryLevel() { loadLevel(index: levelIndex, toState: .play) }
+
+    /// Test hook: `-TestDown 1` measures what the DOWN pad actually changes —
+    /// the fall distance in the air with and without it, and the camera pan
+    /// while standing on solid ground.
+    func runDownTestHookIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestDown") else { return }
+        let window = 0.3
+        func fall(diving: Bool, then: @escaping (CGFloat) -> Void) {
+            playerX = level.spawn.x
+            playerY = level.spawn.y - 300        // into clear air above the spawn
+            playerVy = 0
+            touchDown = diving
+            let y0 = playerY
+            DispatchQueue.main.asyncAfter(deadline: .now() + window) { [weak self] in
+                guard let self else { then(0); return }
+                self.touchDown = false
+                then(self.playerY - y0)
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self else { return }
+            fall(diving: false) { plain in
+                fall(diving: true) { dive in
+                    print("[Mossgate:DOWN] air fall over \(window)s: "
+                          + "\(Int(plain)) units normally, \(Int(dive)) with DOWN held")
+                    // Grounded DOWN should pan the camera down. Use placePlayer,
+                    // which offsets for the player's height — assigning spawn.y
+                    // directly drops them *inside* the ground block and straight
+                    // through it.
+                    self.placePlayer(at: self.level.spawn)
+                    self.playerVx = 0
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                        let before = self.camY + self.peekY
+                        self.touchDown = true
+                        print("[Mossgate:DOWN] settle: grounded=\(self.grounded) "
+                              + "kind=\(self.groundKind) playerY=\(Int(self.playerY)) camY=\(Int(before))")
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
+                            let during = self.camY + self.peekY
+                            self.touchDown = false
+                            print("[Mossgate:DOWN] camera camY \(Int(before)) -> \(Int(during)) "
+                                  + "with DOWN held while grounded=\(self.grounded) "
+                                  + "groundKind=\(self.groundKind)")
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     /// Test hook: `-TestDeath 1` kills the player repeatedly and logs the light
     /// counter and state after each death, so the lose-light → game-over flow
@@ -871,6 +922,14 @@ final class MossgateScene: SKScene {
         camX = max(0, min(camX, max(0, level.width - 720)))
         camY = max(0, min(camY, max(0, level.height - 360)))
 
+        // DOWN while standing pans the view down. Applied as an offset on top of
+        // the dead-zone follow rather than through focusY, so the pan is always
+        // the same size instead of depending on where the player happens to sit
+        // inside the dead zone. Gives the pad a visible job on solid ground, and
+        // a way to see what waits below before dropping through a ledge.
+        let peekTarget: CGFloat = (touchDown && grounded) ? Phys.lookDown : 0
+        peekY += (peekTarget - peekY) * (1 - exp(-9 * dt))
+
         let jumpDown = touchJump
         if jumpDown && !prevJump { buffer = Phys.buffer }
         let released = prevJump && !jumpDown
@@ -913,7 +972,12 @@ final class MossgateScene: SKScene {
 
         var g: CGFloat = playerVy < 0 ? Phys.gRise : Phys.gFall
         if abs(playerVy) < Phys.apex { g = Phys.gApex }
-        playerVy = min(Phys.maxFall, playerVy + g * dt)
+        // DOWN held while descending = dive. Gated on `playerVy > 0` so it
+        // only ever speeds the fall up; it never shortens a jump.
+        let diving = touchDown && !grounded && playerVy > 0
+        if diving { g *= Phys.diveGravity }
+        let terminal = diving ? Phys.maxFall * Phys.diveMaxFall : Phys.maxFall
+        playerVy = min(terminal, playerVy + g * dt)
         playerY += playerVy * dt
 
         grounded = false
@@ -1047,6 +1111,12 @@ final class MossgateScene: SKScene {
             coyote = 0
             playerY += 4
             buffer = 0
+            // Show that the pad did something: a puff of moss at the feet and a
+            // soft thud, instead of silently sinking through the ledge.
+            burst(at: CGPoint(x: playerX + Phys.playerW/2, y: playerY + Phys.playerH),
+                  count: 8, color: UIColor(red: 0.55, green: 0.62, blue: 0.42, alpha: 1),
+                  speed: 50)
+            AudioEngine.shared.land()
         }
     }
 
@@ -1182,7 +1252,7 @@ final class MossgateScene: SKScene {
         // so ty = camY * viewScale, and the y-flip makes the world y=0 land at
         // the top of the view as expected from a top-down canvas convention.
         worldNode.position = CGPoint(x: -camX * viewScale + shakeX,
-                                     y: camY * viewScale + shakeY)
+                                     y: (camY + peekY) * viewScale + shakeY)
         // DEBUG
         if Int(time * 4) != lastDebugFrame {
             lastDebugFrame = Int(time * 4)

@@ -18,6 +18,17 @@ enum Phys {
     static let maxFall: CGFloat = 860
     static let coyote: CGFloat = 0.11
     static let buffer: CGFloat = 0.13
+
+    // ── DOWN pad ──────────────────────────────────────────────────
+    // DOWN used to do nothing at all unless you happened to be standing on a
+    // one-way ledge, which made it read as a broken button.
+    /// Falling with DOWN held: this much heavier gravity...
+    static let diveGravity: CGFloat = 1.9
+    /// ...up to this multiple of the normal terminal velocity.
+    static let diveMaxFall: CGFloat = 1.5
+    /// Grounded with DOWN held: how far the camera biases down, in world units.
+    /// Big enough to push past the camera's dead zone so the pan is visible.
+    static let lookDown: CGFloat = 140
 }
 
 enum GameState {
