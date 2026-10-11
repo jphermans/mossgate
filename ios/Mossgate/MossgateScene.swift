@@ -453,6 +453,36 @@ final class MossgateScene: SKScene {
 
     func startLevel(_ index: Int) {
         loadLevel(index: index, toState: .play)
+        runDropTestHookIfRequested()
+    }
+
+    /// Test hook: `-TestDrop 1` parks the player on the level's first one-way
+    /// ledge, waits for them to settle, then taps DOWN and logs whether
+    /// `tryDrop()` actually fired. Lets a headless run prove the DOWN pad works
+    /// without a human on the simulator.
+    private func runDropTestHookIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestDrop"),
+              let ow = level.solids.first(where: { $0.oneway }) else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self else { return }
+            // Drop the player onto the ledge and let them land.
+            self.playerX = ow.x + ow.w / 2 - Phys.playerW / 2
+            self.playerY = ow.y - Phys.playerH - 2
+            self.playerVy = 0
+            self.playerVx = 0
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                let yBefore = self.playerY
+                let kindBefore = self.groundKind
+                let grounded = self.grounded
+                self.setTouch(down: true)    // the DOWN pad press
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                    self.setTouch(down: false)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    print("[Mossgate] TESTDROP onLedge=\(kindBefore) grounded=\(grounded) yBefore=\(Int(yBefore)) yAfter=\(Int(self.playerY)) kindAfter=\(self.groundKind) fell=\(Int(self.playerY - yBefore))")
+                }
+            }
+        }
     }
 
     func retryLevel() { loadLevel(index: levelIndex, toState: .play) }
@@ -486,7 +516,17 @@ final class MossgateScene: SKScene {
         if let v = left { touchLeft = v }
         if let v = right { touchRight = v }
         if let v = jump { touchJump = v }
-        if let v = down { touchDown = v }
+        if let v = down {
+            // The DOWN pad is a one-shot "step off the ledge you are standing on"
+            // in the original game: mossgate.tsx wires its pointer-down to
+            // setTouch("drop", true), and engine.ts turn that into
+            // `touch.drop = true` (consumed by tryDrop()). Mirror that here by
+            // firing the one-shot on the rising edge, otherwise a plain tap of
+            // DOWN only sets the *held* state, which is read solely inside
+            // tryJump() — and that bails out unless a jump was queued.
+            if v && !touchDown { touchDrop = true }
+            touchDown = v
+        }
         if let v = drop { if v { touchDrop = true } }
     }
 
