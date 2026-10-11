@@ -6,6 +6,8 @@ struct GameHUDView: View {
     /// The pause button only makes sense while actually playing.
     var showsPause: Bool = true
     let onPause: () -> Void
+    /// Straight back to the menu, without pausing first.
+    let onBack: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,11 +16,17 @@ struct GameHUDView: View {
                 Spacer()
                 title
                 Spacer()
-                if showsPause {
-                    pauseButton
-                } else {
-                    // Keep the row's geometry stable when the button is hidden.
-                    Color.clear.frame(width: 38, height: 38)
+                // Back is always available, pause only while playing: needing to
+                // pause before you can leave is two taps to do one thing, and the
+                // pause panel already carries its own way out.
+                HStack(spacing: 8) {
+                    backButton
+                    if showsPause {
+                        pauseButton
+                    } else {
+                        // Keep the row's geometry stable when the button is hidden.
+                        Color.clear.frame(width: 38, height: 38)
+                    }
                 }
             }
             .padding(.horizontal, 14)
@@ -93,6 +101,22 @@ struct GameHUDView: View {
                         .overlay(Circle().strokeBorder(Color("MossgateBorder"), lineWidth: 1))
                 )
         }
+    }
+
+    /// Back to the menu. The chevron is the system's own gesture for this, and it
+    /// sits in the corner the thumb is not fighting the jump button for.
+    private var backButton: some View {
+        Button(action: onBack) {
+            Image(systemName: "chevron.left")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color("MossgateCream"))
+                .frame(width: 38, height: 38)
+                .background(
+                    Circle().fill(Color("MossgateSurface").opacity(0.75))
+                        .overlay(Circle().strokeBorder(Color("MossgateBorder"), lineWidth: 1))
+                )
+        }
+        .accessibilityLabel("Back to the gates")
     }
 }
 

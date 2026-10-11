@@ -159,9 +159,10 @@ struct RootView: View {
             // actually visible at the moment it drops. The pause button only
             // applies while playing.
             if hud.phase != .title && hud.phase != .pause {
-                GameHUDView(hud: hud, showsPause: hud.phase == .play) {
-                    session.scene?.pause()
-                }
+                GameHUDView(hud: hud,
+                            showsPause: hud.phase == .play,
+                            onPause: { session.scene?.pause() },
+                            onBack: { leaveToMenu() })
             }
             if hud.phase == .pause || hud.phase == .dead
                || hud.phase == .win || hud.phase == .gameOver {
@@ -176,12 +177,7 @@ struct RootView: View {
                                  session.scene?.retryLevel()
                                }
                              : { session.scene?.retryLevel() },
-                    onQuit:   {
-                        // Leaving while out of light would otherwise strand the
-                        // player on the gates with no light to spend.
-                        if SettingsStore.shared.isOutOfLight { SettingsStore.shared.refillLives() }
-                        withAnimation(.easeInOut(duration: 0.25)) { phase = .title }
-                    },
+                    onQuit:   { leaveToMenu() },
                     onNext:   hud.phase == .win && gameLevelIndex < SettingsStore.shared.gates.count - 1
                               ? { session.scene?.nextLevel(); gameLevelIndex += 1 }
                               : nil
@@ -195,6 +191,16 @@ struct RootView: View {
     }
 
     // MARK: - Helpers
+
+    /// Leave the level and go back to the gates.
+    ///
+    /// One definition, because there are two ways out — the HUD's back button and
+    /// the pause panel's — and leaving while out of light would otherwise strand the
+    /// player on the gates with no light left to spend.
+    private func leaveToMenu() {
+        if SettingsStore.shared.isOutOfLight { SettingsStore.shared.refillLives() }
+        withAnimation(.easeInOut(duration: 0.25)) { phase = .title }
+    }
 
     /// Detents for the Setup sheet.
     ///
