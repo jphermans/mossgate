@@ -70,6 +70,11 @@ struct SetupView: View {
                                         .strokeBorder(Color.red.opacity(0.5), lineWidth: 1)
                                 )
                         }
+                        Text("Mossgate v\(AppInfo.shortVersion) (\(AppInfo.build))")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(Color("MossgateMuted"))
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 10)
                     }
                     .padding(.horizontal, 22)
                 }

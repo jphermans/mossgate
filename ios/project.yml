@@ -12,8 +12,16 @@ settings:
     SWIFT_VERSION: "5.9"
     IPHONEOS_DEPLOYMENT_TARGET: "18.0"
     ENABLE_USER_SCRIPT_SANDBOXING: NO
-    MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    # ── Versioning ───────────────────────────────────────────────────────────
+    # Bump CURRENT_PROJECT_VERSION on EVERY change batch (it must also strictly
+    # increase for each App Store Connect upload). Bump MARKETING_VERSION at
+    # feature milestones.
+    #   ./scripts/bump-ios-version.py            # build +1        (every batch)
+    #   ./scripts/bump-ios-version.py --patch    # 0.1.0 -> 0.1.1  (bugfix batch)
+    #   ./scripts/bump-ios-version.py --minor    # 0.1.0 -> 0.2.0  (new features)
+    # The script rewrites these two lines and re-runs xcodegen.
+    MARKETING_VERSION: "0.1.1"
+    CURRENT_PROJECT_VERSION: "2"
     SWIFT_STRICT_CONCURRENCY: minimal
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
