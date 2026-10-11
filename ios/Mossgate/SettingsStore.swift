@@ -26,6 +26,25 @@ final class SettingsStore: ObservableObject {
         didSet { UserDefaults.standard.set(controllerOn, forKey: "controllerOn") }
     }
 
+    /// Seed for the current run. Every restart reshuffles the worlds — sky
+    /// palette, starfield, mover timing and pickup placement all derive from it,
+    /// so a level never looks or plays quite the same twice.
+    ///
+    /// Deliberately NOT persisted: a new launch is a new world. (Relaunching to
+    /// see what you get is the point.)
+    @Published private(set) var runSeed: Int = {
+        // Test hook: -Seed N forces a seed so two runs can be compared.
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-Seed"), i + 1 < args.count,
+           let n = Int(args[i + 1]) { return n }
+        return Int.random(in: 1...999_999)
+    }()
+
+    /// Roll a fresh set of worlds without relaunching.
+    func newRun() {
+        runSeed = Int.random(in: 1...999_999)
+    }
+
     /// Per-level progress (cleared + best coin count), persisted across launches.
     @Published var cleared: [Bool]
     @Published var bestCoins: [Int]

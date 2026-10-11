@@ -43,6 +43,18 @@ final class MossgateScene: SKScene {
     // Progress
     private var coinsGot: Set<Int> = []
     private var lanternsGot: Set<Int> = []
+    /// Pickup positions for this load, after the per-run jitter. BOTH the sprite
+    /// and the pickup test read these, so the two can never disagree — the
+    /// collection tests used to read `level.coins[i]` directly.
+    private var coinPos: [CGPoint] = []
+    private var lanternPos: [CGPoint] = []
+    /// Per-run mover timing, from the run seed. Only the phase and the period
+    /// change — never the travel envelope — so the "movers never cross the land"
+    /// property that `-TestMovers` verifies is untouched.
+    private var moverPhaseOffset: [CGFloat] = []
+    private var moverPeriodScale: [CGFloat] = []
+    /// Run seed the current sky cache was built for.
+    private var skyCacheSeed: Int = -1
     private var cp: Int = -1
     private var spawnPoint: CGPoint = .zero
     private var checkpointSnap: (point: CGPoint, coins: [Int], cp: Int)?
@@ -325,6 +337,19 @@ final class MossgateScene: SKScene {
 
     // MARK: - Procedural sky
 
+    /// Hue-rotate / saturate / brighten a colour, for the per-run palette shift.
+    private static func shift(_ c: UIColor, hue: CGFloat,
+                              saturation: CGFloat, brightness: CGFloat) -> UIColor {
+        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard c.getHue(&h, saturation: &s, brightness: &b, alpha: &a) else { return c }
+        var nh = h + hue
+        nh -= floor(nh)                       // wrap into 0..<1
+        return UIColor(hue: nh,
+                       saturation: min(1, s * saturation),
+                       brightness: min(1, b * brightness),
+                       alpha: a)
+    }
+
     /// Builds the sky texture for one level: a vertical gradient plus scattered
     /// stars, generated at `512 x height` so a single tile spans the level's
     /// full height and the gradient never visibly repeats.
@@ -334,20 +359,30 @@ final class MossgateScene: SKScene {
         let renderer = UIGraphicsImageRenderer(size: size)
         let image = renderer.image { ctx in
             let cg = ctx.cgContext
-            let top, mid1, mid2, bottom: UIColor
+            // Base palette per world, then shifted per run so each restart gets
+            // its own sky without leaving the world's palette family.
+            let base: [UIColor]
             if ember {
                 // Ember Caves: warm, smoky, lava-glow near the horizon.
-                top    = UIColor(red: 0.07, green: 0.04, blue: 0.04, alpha: 1)
-                mid1   = UIColor(red: 0.22, green: 0.08, blue: 0.04, alpha: 1)
-                mid2   = UIColor(red: 0.34, green: 0.14, blue: 0.05, alpha: 1)
-                bottom = UIColor(red: 0.10, green: 0.05, blue: 0.03, alpha: 1)
+                base = [UIColor(red: 0.07, green: 0.04, blue: 0.04, alpha: 1),
+                        UIColor(red: 0.22, green: 0.08, blue: 0.04, alpha: 1),
+                        UIColor(red: 0.34, green: 0.14, blue: 0.05, alpha: 1),
+                        UIColor(red: 0.10, green: 0.05, blue: 0.03, alpha: 1)]
             } else {
                 // Mossgate Dusk: deep teal night sky, amber-lit green low down.
-                top    = UIColor(red: 0.020, green: 0.058, blue: 0.086, alpha: 1)
-                mid1   = UIColor(red: 0.043, green: 0.118, blue: 0.165, alpha: 1)
-                mid2   = UIColor(red: 0.075, green: 0.180, blue: 0.176, alpha: 1)
-                bottom = UIColor(red: 0.055, green: 0.098, blue: 0.094, alpha: 1)
+                base = [UIColor(red: 0.020, green: 0.058, blue: 0.086, alpha: 1),
+                        UIColor(red: 0.043, green: 0.118, blue: 0.165, alpha: 1),
+                        UIColor(red: 0.075, green: 0.180, blue: 0.176, alpha: 1),
+                        UIColor(red: 0.055, green: 0.098, blue: 0.094, alpha: 1)]
             }
+            var pal = SplitMix64(state: seed &* 0x2545_F491_4F6C_DD1D)
+            // Wide enough to change the world's mood at a glance, narrow enough
+            // that Mossgate always reads as a cool dusk and Ember as warm rock.
+            let hue = CGFloat(Double(pal.next() % 1_000) / 1_000.0 - 0.5) * 0.22   // ±40°
+            let satScale = CGFloat(0.62 + Double(pal.next() % 1_000) / 1_000.0 * 0.85)
+            let briScale = CGFloat(0.72 + Double(pal.next() % 1_000) / 1_000.0 * 0.62)
+            let shifted = base.map { Self.shift($0, hue: hue, saturation: satScale, brightness: briScale) }
+            let (top, mid1, mid2, bottom) = (shifted[0], shifted[1], shifted[2], shifted[3])
             let space = CGColorSpaceCreateDeviceRGB()
             let colors = [top.cgColor, mid1.cgColor, mid2.cgColor, bottom.cgColor] as CFArray
             let stops: [CGFloat] = [0, 0.40, 0.78, 1.0]
@@ -421,15 +456,23 @@ final class MossgateScene: SKScene {
     private func addSky() {
         let isEmber = (level.world == 1)
 
-        // Cache one sky per (world, height) — levels in the same world usually
-        // share a height, so this avoids regenerating the image every load.
+        // Cache one sky per (world, height, run seed) — levels in the same world
+        // usually share a height, so this avoids regenerating the image on every
+        // load. Cleared when the run seed changes so a reroll doesn't pile up.
+        if skyCacheSeed != SettingsStore.shared.runSeed {
+            skyCache.removeAll()
+            skyCacheSeed = SettingsStore.shared.runSeed
+        }
         let key = "\(level.world)-\(Int(level.height))"
         if let cached = skyCache[key] {
             skyTexture = cached
         } else {
-            let tex = makeSkyTexture(seed: isEmber ? 0x45_6D_62 : 0x4D_6F_73,
-                                     ember: isEmber,
-                                     height: level.height)
+            // Fold the run seed into the world's base seed: a different starfield
+            // AND a different palette shift every restart.
+            let base: UInt64 = isEmber ? 0x45_6D_62 : 0x4D_6F_73
+            let mixed = base ^ (UInt64(bitPattern: Int64(SettingsStore.shared.runSeed))
+                                 &* 0x9E37_79B9_7F4A_7C15)
+            let tex = makeSkyTexture(seed: mixed, ember: isEmber, height: level.height)
             skyCache[key] = tex
             skyTexture = tex
         }
@@ -587,6 +630,24 @@ final class MossgateScene: SKScene {
                 }
             }
         }
+    }
+
+    /// Nudges a pickup to a per-run position, rejected if the new spot would sit
+    /// inside solid ground. Keeps the placement honest: a reshuffle can move a
+    /// coin but can never bury it.
+    private func variedPickup(x: CGFloat, y: CGFloat, index: Int) -> CGPoint {
+        var rng = SplitMix64(state: UInt64(bitPattern: Int64(SettingsStore.shared.runSeed))
+                                    &+ UInt64(truncatingIfNeeded: index &* 2_654_435_761))
+        let dx = CGFloat(Double(rng.next() % 1_000) / 1_000.0 - 0.5) * 56   // ±28
+        let dy = CGFloat(Double(rng.next() % 1_000) / 1_000.0 - 0.5) * 24   // ±12
+        let candidate = CGPoint(x: x + dx, y: y + dy)
+        let box = CGRect(x: candidate.x - 15, y: candidate.y - 15, width: 30, height: 30)
+        for s in level.solids where !s.oneway {
+            if box.intersects(CGRect(x: s.x, y: s.y, width: s.w, height: s.h)) {
+                return CGPoint(x: x, y: y)
+            }
+        }
+        return candidate
     }
 
     func retryLevel() { loadLevel(index: levelIndex, toState: .play) }
@@ -842,6 +903,15 @@ final class MossgateScene: SKScene {
         acc = 0
         // Match engine.ts loadLevel: seed positions, evaluate the mover curve at
         // t = 0, then zero the delta so the first substep doesn't jerk the rider.
+        // The per-run timing offsets must exist before placeMovers() reads them.
+        var moverRng = SplitMix64(state: UInt64(bitPattern: Int64(SettingsStore.shared.runSeed))
+                                         &* 0xDA94_2042_4B4E_5F8D)
+        moverPhaseOffset = level.movers.map { _ in
+            CGFloat(Double(moverRng.next() % 10_000) / 10_000.0) * 2 * .pi
+        }
+        moverPeriodScale = level.movers.map { _ in
+            0.85 + CGFloat(Double(moverRng.next() % 1_000) / 1_000.0) * 0.30
+        }
         moverPositions = level.movers.map { CGPoint(x: $0.x, y: $0.y) }
         placeMovers()
         moverPrev = moverPositions
@@ -895,10 +965,13 @@ final class MossgateScene: SKScene {
 
         // Coins
         coinNodes = []
-        for c in level.coins {
+        coinPos = level.coins.enumerated().map {
+            variedPickup(x: $0.element.x, y: $0.element.y, index: $0.offset)
+        }
+        for i in level.coins.indices {
             let node = SKSpriteNode(texture: coinFrames.first, color: .white,
                                     size: CGSize(width: 26 * viewScale, height: 26 * viewScale))
-            node.position = CGPoint(x: c.x * viewScale, y: c.y * viewScale)
+            node.position = CGPoint(x: coinPos[i].x * viewScale, y: coinPos[i].y * viewScale)
             node.alpha = 1
             addWorldChild(node)
             coinNodes.append(node)
@@ -906,10 +979,13 @@ final class MossgateScene: SKScene {
 
         // Lanterns — the pickups you collect to refill your light.
         lanternNodes = []
-        for l in level.lanterns {
+        lanternPos = level.lanterns.enumerated().map {
+            variedPickup(x: $0.element.x, y: $0.element.y, index: $0.offset &+ 500)
+        }
+        for (i, _) in level.lanterns.enumerated() {
             let node = SKSpriteNode(texture: lanternTexture, color: .white,
                                     size: CGSize(width: 34 * viewScale, height: 34 * viewScale))
-            node.position = CGPoint(x: l.x * viewScale, y: l.y * viewScale)
+            node.position = CGPoint(x: lanternPos[i].x * viewScale, y: lanternPos[i].y * viewScale)
             addWorldChild(node)
             lanternNodes.append(node)
         }
@@ -952,6 +1028,17 @@ final class MossgateScene: SKScene {
         print("[Mossgate] loadLevel: solids=\(solidNodes.count) movers=\(moverNodes.count) spikes=\(spikeNodes.count) coins=\(coinNodes.count) checkpoints=\(checkpointNodes.count) flag=\(flagNode != nil) player=\(playerNode != nil) viewScale=\(viewScale) camY=\(camY) moverWorld=\(moverPositions.map { "(\(Int($0.x)),\(Int($0.y)))" }.joined(separator: " ")) moverNode=\(moverNodes.map { "(\(Int($0.position.x)),\(Int($0.position.y)))" }.joined(separator: " "))")
         setState(toState)
         notifyPhase()
+        // -TestSeed 1: report what the run seed actually changed, so variation is
+        // checkable rather than asserted.
+        if ProcessInfo.processInfo.arguments.contains("-TestSeed") {
+            let c0 = level.coins.first.map { "(\(Int($0.x)),\(Int($0.y)))" } ?? "-"
+            let v0 = coinPos.first.map { "(\(Int($0.x)),\(Int($0.y)))" } ?? "-"
+            let scales = moverPeriodScale.map { String(format: "%.2f", $0) }.joined(separator: ",")
+            let shifts = moverPhaseOffset.map { String(format: "%.2f", $0) }.joined(separator: ",")
+            print("[Mossgate:RUN] seed=\(SettingsStore.shared.runSeed) lvl=\(levelIndex) "
+                  + "\"\(level.name)\" sky=\(level.world) coin0 \(c0) -> \(v0) "
+                  + "moverPeriod=[\(scales)] moverPhase=[\(shifts)]")
+        }
     }
 
     private func setState(_ s: GameState) { state = s }
@@ -1154,7 +1241,8 @@ final class MossgateScene: SKScene {
         // Coins
         let feetX = playerX + Phys.playerW / 2
         let midY = playerY + Phys.playerH * 0.45
-        for (i, c) in level.coins.enumerated() where !coinsGot.contains(i) {
+        for i in level.coins.indices where !coinsGot.contains(i) {
+            let c = i < coinPos.count ? coinPos[i] : CGPoint(x: level.coins[i].x, y: level.coins[i].y)
             if hypot(feetX - c.x, midY - c.y) < 40 {
                 coinsGot.insert(i)
                 AudioEngine.shared.coin()
@@ -1163,7 +1251,8 @@ final class MossgateScene: SKScene {
         }
 
         // Lanterns — collecting one refills a unit of light (capped at max).
-        for (i, l) in level.lanterns.enumerated() where !lanternsGot.contains(i) {
+        for i in level.lanterns.indices where !lanternsGot.contains(i) {
+            let l = i < lanternPos.count ? lanternPos[i] : CGPoint(x: level.lanterns[i].x, y: level.lanterns[i].y)
             if hypot(feetX - l.x, midY - l.y) < 46 {
                 lanternsGot.insert(i)
                 SettingsStore.shared.gainLife()
@@ -1314,7 +1403,11 @@ final class MossgateScene: SKScene {
         guard moverPositions.count == level.movers.count else { return }
         moverPrev = moverPositions   // snapshot before advancing
         for (i, m) in level.movers.enumerated() {
-            let s = sin((time / m.period) * 2 * .pi + m.phase)
+            // Per-run timing: phase always, period by up to ±15%. The travel
+            // envelope is unchanged, so the level geometry guarantee holds.
+            let period = m.period * (i < moverPeriodScale.count ? moverPeriodScale[i] : 1)
+            let phase = m.phase + (i < moverPhaseOffset.count ? moverPhaseOffset[i] : 0)
+            let s = sin((time / period) * 2 * .pi + phase)
             // Store TOP-LEFT world coordinates, matching the engine's Rect
             // convention (`px = x + sin(...) * distance`, `py = y`). The
             // collision rect and the ride-snap use these directly; the sprite

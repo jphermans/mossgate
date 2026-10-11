@@ -59,6 +59,10 @@ struct SetupView: View {
                         Divider()
                             .background(Color("MossgateBorder"))
                             .padding(.vertical, 4)
+                        runSection
+                        Divider()
+                            .background(Color("MossgateBorder"))
+                            .padding(.vertical, 4)
                         controllerSection
                         Divider()
                             .background(Color("MossgateBorder"))
@@ -100,6 +104,50 @@ struct SetupView: View {
         } message: {
             Text("Cleared levels and best coin counts will be cleared. This can't be undone.")
         }
+    }
+
+    /// The run seed and a way to reroll it. Every restart already picks a new
+    /// one; this is for when you want a different world now.
+    private var runSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("New worlds")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color("MossgateCream"))
+                Text("Every restart reshuffles the sky, the pickups and the platform timing.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color("MossgateMuted"))
+            }
+            HStack {
+                Text("Seed")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color("MossgateCream"))
+                Text("\(settings.runSeed)")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color("MossgateMuted"))
+                Spacer()
+                Button {
+                    settings.newRun()
+                    AudioEngine.shared.tap()
+                } label: {
+                    Text("Shuffle")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color("MossgatePrimaryFg"))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10).fill(Color("MossgateLantern"))
+                        )
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color("MossgateSurface").opacity(0.85))
+                .overlay(RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Color("MossgateBorder"), lineWidth: 1))
+        )
     }
 
     /// External controller support: the toggle, what's connected, and the button

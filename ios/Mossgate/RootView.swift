@@ -56,6 +56,12 @@ struct RootView: View {
         .onReceive(SettingsStore.shared.$controllerOn) { on in
             session.scene?.setControllerEnabled(on)
         }
+        // A reshuffle rebuilds the current level so the new world is visible
+        // immediately. Setup is only reachable from the title screen, so no
+        // in-level progress is lost.
+        .onReceive(SettingsStore.shared.$runSeed) { _ in
+            session.scene?.retryLevel()
+        }
         .onChange(of: phase) { _, newValue in
             AppDelegate.orientationLock = (newValue == .splash) ? .portrait : .landscape
             if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
