@@ -49,13 +49,17 @@ struct GameHUDView: View {
                         .foregroundStyle(Color("MossgateCream"))
                 }
             }
-            // Light (lives)
-            HStack(spacing: 3) {
-                ForEach(0..<hud.maxLives, id: \.self) { i in
-                    RoundedRectangle(cornerRadius: 1.5)
-                        .fill(i < hud.lives ? Color("MossgateLantern") : Color("MossgateBorder"))
-                        .frame(width: 12, height: 5)
-                }
+            // Light (lives) — shown as a fraction, matching the coin and lantern
+            // counters, so each death reading 3/3 -> 2/3 -> 1/3 -> 0/3 is
+            // unmistakable. The heart is deliberate: a flame here would be
+            // confused with the lantern count beside it.
+            HStack(spacing: 5) {
+                Image(systemName: "heart.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color("MossgateLantern"))
+                Text("\(hud.lives)/\(hud.maxLives)")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color("MossgateCream"))
             }
         }
         .padding(.horizontal, 12)
