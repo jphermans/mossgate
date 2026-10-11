@@ -4,6 +4,7 @@ import SwiftUI
 struct TitleView: View {
     let onStartLevel: (Int) -> Void
     let onOpenSetup: () -> Void
+    let onOpenHelp: () -> Void
     let onOpenGameCenter: () -> Void
 
     @ObservedObject private var settings = SettingsStore.shared
@@ -18,6 +19,19 @@ struct TitleView: View {
                     header
                     ForEach(Worlds.all, id: \.id) { world in
                         worldCard(world)
+                    }
+                    Button(action: onOpenHelp) {
+                        Label("How to play", systemImage: "questionmark.circle")
+                            .frame(maxWidth: .infinity, minHeight: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(Color("MossgateLantern").opacity(0.16))
+                                    .overlay(RoundedRectangle(cornerRadius: 14)
+                                        .strokeBorder(Color("MossgateLantern").opacity(0.55),
+                                                      lineWidth: 1))
+                            )
+                            .foregroundStyle(Color("MossgateCream"))
+                            .font(.system(size: 15, weight: .semibold))
                     }
                     HStack(spacing: 12) {
                         Button(action: onOpenSetup) {

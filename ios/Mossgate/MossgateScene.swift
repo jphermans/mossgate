@@ -271,69 +271,11 @@ final class MossgateScene: SKScene {
         // Moon + lantern pickup art. The sky is generated per level (it depends
         // on the level height, so it can't be cached across levels).
         moonTexture = makeMoonTexture()
-        lanternTexture = makeLanternTexture()
+        lanternTexture = SKTexture(image: GameArt.lanternImage())
+        lanternTexture?.filteringMode = .linear
     }
 
-    // MARK: - Procedural lantern pickup
-
-    /// A small lit lantern you can pick up. The wick glows with the same warm
-    /// amber as the player's lantern so the player feels like they're
-    /// "gathering light" for the journey ahead.
-    private func makeLanternTexture() -> SKTexture {
-        let size = CGSize(width: 64, height: 64)
-        let renderer = UIGraphicsImageRenderer(size: size)
-        let image = renderer.image { ctx in
-            let cg = ctx.cgContext
-            let space = CGColorSpaceCreateDeviceRGB()
-            // Outer glow halo
-            let halo   = UIColor(red: 1.0, green: 0.78, blue: 0.40, alpha: 0.0).cgColor
-            let haloIn = UIColor(red: 1.0, green: 0.78, blue: 0.40, alpha: 0.45).cgColor
-            let haloColors = [haloIn, halo] as CFArray
-            let haloStops: [CGFloat] = [0, 1]
-            let haloGrad = CGGradient(colorsSpace: space, colors: haloColors, locations: haloStops)!
-            cg.drawRadialGradient(haloGrad,
-                                  startCenter: CGPoint(x: size.width/2, y: size.height/2 + 4),
-                                  startRadius: 0,
-                                  endCenter:   CGPoint(x: size.width/2, y: size.height/2 + 4),
-                                  endRadius:   size.width/2,
-                                  options: [])
-
-            // Top loop / handle
-            UIColor(red: 0.35, green: 0.22, blue: 0.10, alpha: 1).setStroke()
-            cg.setLineWidth(2)
-            cg.addArc(center: CGPoint(x: size.width/2, y: size.height/2 - 8),
-                      radius: 5, startAngle: .pi, endAngle: 0, clockwise: true)
-            cg.strokePath()
-
-            // Body (dark glass with warm glow inside)
-            let body = CGRect(x: size.width/2 - 10, y: size.height/2 - 8, width: 20, height: 18)
-            UIColor(red: 0.15, green: 0.10, blue: 0.06, alpha: 1).setFill()
-            UIBezierPath(roundedRect: body, cornerRadius: 3).fill()
-
-            // Inner glow
-            let innerColors = [
-                UIColor(red: 1.0, green: 0.92, blue: 0.70, alpha: 1).cgColor,
-                UIColor(red: 1.0, green: 0.70, blue: 0.30, alpha: 0.8).cgColor,
-            ] as CFArray
-            let innerStops: [CGFloat] = [0, 1]
-            let innerGrad = CGGradient(colorsSpace: space, colors: innerColors, locations: innerStops)!
-            cg.saveGState()
-            UIBezierPath(roundedRect: body.insetBy(dx: 3, dy: 3), cornerRadius: 2).addClip()
-            cg.drawLinearGradient(innerGrad,
-                                  start: CGPoint(x: body.midX, y: body.minY),
-                                  end:   CGPoint(x: body.midX, y: body.maxY),
-                                  options: [])
-            cg.restoreGState()
-
-            // Base
-            UIColor(red: 0.25, green: 0.16, blue: 0.08, alpha: 1).setFill()
-            UIBezierPath(roundedRect: CGRect(x: size.width/2 - 12, y: size.height/2 + 10, width: 24, height: 4),
-                         cornerRadius: 1).fill()
-        }
-        let tex = SKTexture(image: image)
-        tex.filteringMode = .linear
-        return tex
-    }
+    // MARK: - Lantern pickup
 
     // MARK: - Procedural sky
 

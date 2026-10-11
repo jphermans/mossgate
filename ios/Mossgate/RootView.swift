@@ -11,6 +11,7 @@ struct RootView: View {
     @State private var gameLevelIndex: Int = 0
     @State private var hud: MossgateScene.HudInfo = .empty
     @State private var showSetup = false
+    @State private var showHelp = false
     @StateObject private var touch = TouchState()
     @StateObject private var session = GameSession()
 
@@ -33,6 +34,7 @@ struct RootView: View {
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
                     },
                     onOpenSetup: { showSetup = true },
+                    onOpenHelp: { showHelp = true },
                     onOpenGameCenter: {
                         GameCenterManager.shared.openDashboard(presenter: topViewController())
                     }
@@ -51,6 +53,12 @@ struct RootView: View {
         .sheet(isPresented: $showSetup) {
             SetupView(onDone: { showSetup = false })
                 .presentationDetents(Self.setupDetents)
+                .presentationDragIndicator(.visible)
+        }
+        // Help / About. Tall detent: it is a long read, not a quick setting.
+        .sheet(isPresented: $showHelp) {
+            AboutView(onDone: { showHelp = false })
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .onReceive(SettingsStore.shared.$controllerOn) { on in
@@ -77,6 +85,9 @@ struct RootView: View {
                     // Setup sheet already presented (used to verify the sheet
                     // wiring without a simulator tap).
                     let wantsSetup = args.contains("-OpenSetup")
+                    // Test hook: -OpenHelp 1 lands on the title screen with the
+                    // help sheet already presented.
+                    let wantsHelp = args.contains("-OpenHelp")
                     // Test hook: -SkipSplash 1 skips past the splash screen.
                     // Optional second arg -StartInLevel N jumps straight into level N (test rigs).
                     if let i = args.firstIndex(of: "-StartInLevel"),
@@ -87,12 +98,17 @@ struct RootView: View {
                             gameLevelIndex = idx
                             phase = .game
                         }
-                    } else if UserDefaults.standard.bool(forKey: "SkipSplash") || wantsSetup {
+                    } else if UserDefaults.standard.bool(forKey: "SkipSplash") || wantsSetup || wantsHelp {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                             withAnimation(.easeInOut(duration: 0.35)) { phase = .title }
                             if wantsSetup {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                     showSetup = true
+                                }
+                            }
+                            if wantsHelp {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    showHelp = true
                                 }
                             }
                         }
