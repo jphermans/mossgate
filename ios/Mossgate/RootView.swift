@@ -197,6 +197,39 @@ struct RootView: View {
         .onChange(of: touch.jump)  { _, _ in touch.push(to: session.scene) }
         .onChange(of: touch.down)  { _, _ in touch.push(to: session.scene) }
         .onChange(of: touch.up)    { _, _ in touch.push(to: session.scene) }
+        // -DemoPlay 1: get off a death screen so filming can continue.
+        //
+        // Observed here rather than polled by a timer, because a timer closure capturing the
+        // HUD reads a stale snapshot of the phase and its guard never fires — three takes sat
+        // on the death panel for 40+ seconds apiece because of exactly that. A view body's
+        // .onChange sees the real published value.
+        //
+        // Pause and win are deliberately not handled: neither is a dead end for a robot.
+        .onChange(of: hud.phase) { _, newPhase in
+            guard ProcessInfo.processInfo.arguments.contains("-DemoPlay"),
+                  newPhase == .dead || newPhase == .gameOver else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                SettingsStore.shared.refillLives()
+                session.scene?.retryLevel()
+            }
+        }
+        // -DemoPlay 1 — drives the game for filming, so it lives HERE rather than in the scene.
+        //
+        // Setting touch state on the scene directly does not work: the HUD pushes its own
+        // TouchState to the scene, which overwrites whatever the scene set for itself, and a
+        // layout pass can replace the scene object outright. Two recordings made that way were
+        // 43 and 46 seconds of a character standing perfectly still. Going through the same
+        // TouchState the on-screen buttons use means nothing can overwrite it.
+        .onAppear {
+            guard ProcessInfo.processInfo.arguments.contains("-DemoPlay") else { return }
+            touch.right = true
+            // Tighter than a human would play, because the demo cannot see brambles coming.
+            _ = Timer.scheduledTimer(withTimeInterval: 0.34, repeats: true) { _ in
+                // A tap, not a hold — the game reads the jump on the rising edge.
+                touch.jump = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) { touch.jump = false }
+            }
+        }
     }
 
     // MARK: - Helpers
