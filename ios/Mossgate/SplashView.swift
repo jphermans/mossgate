@@ -46,7 +46,9 @@ struct SplashView: View {
             .opacity(0.55)
             .ignoresSafeArea()
 
-            // Soft amber radial glow behind the lantern
+            // Warm amber bloom over the painting, under the title. It used to halo the lantern
+            // mark that sat above the wordmark; the mark is gone, and this stays — reading now
+            // as the lantern's own light spilling across the image.
             RadialGradient(
                 colors: [
                     Color(red: 0.94, green: 0.63, blue: 0.25).opacity(0.35),
@@ -61,8 +63,6 @@ struct SplashView: View {
             .animation(.easeInOut(duration: 2.6).repeatForever(autoreverses: true), value: pulse)
 
             VStack(spacing: 18) {
-                LanternMark(size: 132)
-
                 Text("DUSK RUINS")
                     .font(.system(size: 13, weight: .semibold, design: .default))
                     .tracking(4)
