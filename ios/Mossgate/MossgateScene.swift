@@ -298,6 +298,54 @@ final class MossgateScene: SKScene {
         runSettingsTestIfRequested()
         runEdgeTestIfRequested()
         runProgressTestIfRequested()
+        runCoinSpriteTestIfRequested()
+    }
+
+    /// Test hook: `-TestCoinSprites 1` checks that every coin is DRAWN where it can be
+    /// TAKEN, then stands the player on one and confirms the sprite goes away.
+    ///
+    /// This is the invariant that broke. The per-frame block drew coins at the level's
+    /// authored position while collection tested the placed position, so jumping at a coin
+    /// you could see registered a different coin as taken and left the visible one sitting
+    /// there. Neither the pickup rule nor the placement could have caught it — both were
+    /// self-consistent, and the thing that was wrong was that they disagreed.
+    private func runCoinSpriteTestIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestCoinSprites") else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self else { return }
+            var wrong = 0
+            var worst: CGFloat = 0
+            for i in self.level.coins.indices
+            where i < self.coinNodes.count && i < self.coinPos.count {
+                let drawn = self.coinNodes[i].position
+                let want = CGPoint(x: self.coinPos[i].x * self.viewScale,
+                                   y: self.coinPos[i].y * self.viewScale)
+                let dx = abs(drawn.x - want.x)
+                let dy = abs(drawn.y - want.y)
+                // The bob is deliberate — the sprite rides up and down by up to 3 world
+                // units so it reads as a pickup. Anything more than that in y, or any
+                // difference at all in x, means the sprite is not where the coin is.
+                let ok = dx <= 1 && dy <= 3 * self.viewScale + 1
+                worst = max(worst, dx)
+                if !ok { wrong += 1 }
+            }
+            print("[Mossgate:COINSPRITE] drawnWhereTakeable mismatches=\(wrong)"
+                  + "/\(self.level.coins.count) worstX=\(Int(worst))px "
+                  + (wrong == 0 ? "OK" : "FAIL sprite is not where the coin is"))
+
+            guard let target = self.coinPos.indices.first(where: { !self.coinsGot.contains($0) })
+            else { return }
+            self.playerX = self.coinPos[target].x - Phys.playerW / 2
+            self.playerY = self.coinPos[target].y - Phys.playerH * 0.45
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                let taken = self.coinsGot.contains(target)
+                let hidden = self.coinNodes[safe: target]?.isHidden ?? false
+                let verdict = (taken && hidden)
+                    ? "OK taken-and-gone" : "FAIL taken-but-still-on-screen"
+                print("[Mossgate:COINSPRITE] coin \(target) taken=\(taken) "
+                      + "spriteHidden=\(hidden) \(verdict)")
+            }
+        }
     }
 
     /// Test hook: `-TestProgress 1` puts known progress in the store, tears the gate
@@ -1968,8 +2016,14 @@ final class MossgateScene: SKScene {
             let frame = (coinFrames.isEmpty ? 0 : Int(time * 8) % coinFrames.count)
             node.texture = coinFrames[safe: frame] ?? node.texture
             let bob = sin(time * 3.2 + CGFloat(i)) * 3
-            if i < level.coins.count {
-                let c = level.coins[i]
+            // Draw the coin where it actually IS. This used level.coins[i] — the position
+            // the level authored — while collection tests coinPos[i], where the coin was
+            // really placed. Once coins moved to random spots the two disagree, so the coin
+            // the player jumped at was a different coin from the one being collected: the
+            // counter went up and the coin on screen stayed there, reported as "counted as
+            // taken but still on the screen as not taken".
+            if i < coinPos.count {
+                let c = coinPos[i]
                 node.position = CGPoint(x: c.x * viewScale, y: (c.y + bob) * viewScale)
             }
         }
