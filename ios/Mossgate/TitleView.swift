@@ -22,6 +22,21 @@ struct TitleView: View {
     var body: some View {
         ZStack {
             Color("MossgateDusk").ignoresSafeArea()
+            // The start page's backdrop: the painted lantern-bearer, blurred back and dimmed so
+            // it reads as atmosphere rather than as a picture the cards are sitting on top of.
+            // Every choice here is about the UI staying legible over it — a hero image you can
+            // still read gate names against. The slight scale hides the clipped edge of the
+            // blur, which otherwise draws a soft rectangle just inside the screen.
+            Image("TitleBackdrop")
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .scaleEffect(1.12)
+                .blur(radius: 18)
+                .saturation(0.8)
+                .opacity(0.55)
+                .clipped()
+                .ignoresSafeArea()
             duskGradient
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
