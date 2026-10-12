@@ -32,9 +32,13 @@ struct TitleView: View {
                 .scaledToFill()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .scaleEffect(1.12)
-                .blur(radius: 18)
-                .saturation(0.8)
-                .opacity(0.55)
+                // Blur tuned down from 18: at that radius, in a landscape frame cropping a
+                // square painting, the figure dissolved into a formless wash of colour rather
+                // than reading as something you can half make out. Vague is the brief; a
+                // smudge is not.
+                .blur(radius: 9)
+                .saturation(0.9)
+                .opacity(0.6)
                 .clipped()
                 .ignoresSafeArea()
             duskGradient
