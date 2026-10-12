@@ -84,11 +84,29 @@ Open `ios/Mossgate.xcodeproj` → target Mossgate → **Signing & Capabilities**
 - **Bundle identifier**: `io.jphsystems.mossgate` — must be registered as an App ID (§ 4.1).
 - Signing style automatic; Xcode creates the distribution profile at archive time.
 
-### 3.2 Do NOT enable Game Center
-`GameCenterManager.swift` implements achievements and score submission, but **nothing in the
-game calls it** — no gate reports a score, no achievement is earned. Enabling the Game Center
-capability would advertise functionality that does not exist, and the App Store listing would
-have nothing to point at. It is deliberately left off. Wire the calls first if you want it.
+### 3.2 Game Center needs the capability turned ON, and its IDs created
+`GameCenterManager.swift` is wired: clearing a gate reports achievements and submits two
+leaderboards, and the title screen's Game Center button opens the dashboard. The calls are
+already in the game — completing a gate is what reports.
+
+It reports nothing until an App ID capability exists and the identifiers are registered, so:
+
+- **Capability**: developer.apple.com → Identifiers → `io.jphsystems.mossgate` → tick
+  **Game Center** → Save. Game Center needs no entitlement and no Info.plist key, so there is
+  nothing to change in this repo — the capability is the whole switch.
+- **Identifiers**: enter these in App Store Connect → your app → Game Center. They must match
+  `GameCenterManager.ID` **character for character**. A mismatch is not an error anywhere: the
+  SDK accepts the report and matches it against nothing, so the failure is invisible.
+
+  Achievements — `io.jphsystems.mossgate.first_clear`, `.all_coins_level`, `.world_1_cleared`,
+  `.world_2_cleared`, `.no_death_run`
+  Leaderboards — `.total_coins`, plus one per gate, `.level_<id>_best`, for `<id>` 0 through 35.
+
+  The per-gate set is 36 leaderboards; generate them rather than typing them, and keep the same
+  numbering as `Levels`, because the app submits `level.id` straight into that name.
+
+Until the capability is on, the game is unaffected: every report no-ops and the dashboard button
+simply re-attempts sign-in.
 
 ### 3.3 Do not run `xcodegen` by hand expecting different results
 `ios/project.yml` is the single source of truth for the project; `scripts/bump-ios-version.py`
@@ -104,7 +122,7 @@ both been lost that way before. Change the yml, then let the bump script regener
 <https://developer.apple.com/account/resources/identifiers/list> → **+** → App IDs → App.
 
 - Bundle ID: **explicit**, `io.jphsystems.mossgate`
-- Capabilities: **none needed.** No push, no app groups, no keychain sharing, no Game Center.
+- Capabilities: **Game Center** only — see § 3.2. No push, no app groups, no keychain sharing.
 - If the App ID already exists, use it — do not recreate it.
 
 ### 4.2 Create the app record

@@ -21,19 +21,24 @@ final class GameCenterManager: NSObject, ObservableObject {
 
     /// Replace these with the real identifiers from App Store Connect.
     /// Each achievement and each per-level leaderboard needs its own ID.
+    ///
+    /// Prefixed with the bundle identifier rather than the `grp.` placeholder this used to
+    /// carry: the string is free-form to App Store Connect, so a wrong prefix is not an error,
+    /// it is a silent failure — every report is accepted by the SDK and matched against nothing.
+    /// Whatever is entered in App Store Connect has to equal this text exactly.
     enum ID {
         // Achievements
-        static let firstClear        = "grp.mossgate.first_clear"
-        static let allCoinsLevel     = "grp.mossgate.all_coins_level"
-        static let world1Cleared     = "grp.mossgate.world_1_cleared"
-        static let world2Cleared     = "grp.mossgate.world_2_cleared"
-        static let noDeathRun        = "grp.mossgate.no_death_run"
+        static let firstClear        = "io.jphsystems.mossgate.first_clear"
+        static let allCoinsLevel     = "io.jphsystems.mossgate.all_coins_level"
+        static let world1Cleared     = "io.jphsystems.mossgate.world_1_cleared"
+        static let world2Cleared     = "io.jphsystems.mossgate.world_2_cleared"
+        static let noDeathRun        = "io.jphsystems.mossgate.no_death_run"
         // Leaderboards (per-level, score = coin count)
         static func levelLeaderboard(_ levelId: Int) -> String {
-            "grp.mossgate.level_\(levelId)_best"
+            "io.jphsystems.mossgate.level_\(levelId)_best"
         }
         // Global leaderboard: total coins across all levels
-        static let totalCoinsLeaderboard = "grp.mossgate.total_coins"
+        static let totalCoinsLeaderboard = "io.jphsystems.mossgate.total_coins"
     }
 
     private override init() {
@@ -137,17 +142,35 @@ enum Achievements {
     /// Call this when a level is completed. Reports:
     ///  - first_clear the first time any level is cleared
     ///  - all_coins_level the first time the player grabs every coin in a level
+    ///  - no_death_run for reaching the flag without losing the wick
     ///  - world_1_cleared / world_2_cleared when every level in a world is cleared
     /// Also submits the per-level score and the running total.
-    static func levelCleared(_ level: Level, coins: Int, totalCoins: Int, allCoinsCollected: Bool) {
+    ///
+    /// `deaths` is passed in rather than read, because the count of deaths on THIS attempt lives
+    /// with the scene that ran it — it is reset per attempt and has no meaning afterwards.
+    static func levelCleared(_ level: Level,
+                             coins: Int,
+                             totalCoins: Int,
+                             allCoinsCollected: Bool,
+                             deaths: Int) {
         let gc = GameCenterManager.shared
-        // First clear of any level
-        if SettingsStore.shared.cleared.firstIndex(of: true) == nil {
+        // First clear of any level.
+        //
+        // Counted, not "is anything cleared": `markCleared` runs before this does, so at this
+        // moment THIS gate is already true — which is why the previous
+        // `firstIndex(of: true) == nil` test could never be satisfied and the achievement was
+        // unreachable. Exactly one cleared gate means this was the first. Replaying that gate
+        // re-reports, which Game Center absorbs.
+        if SettingsStore.shared.cleared.filter({ $0 }).count == 1 {
             gc.reportAchievement(id: GameCenterManager.ID.firstClear)
         }
         // All coins in this level
         if allCoinsCollected {
             gc.reportAchievement(id: GameCenterManager.ID.allCoinsLevel)
+        }
+        // Reached the flag without dying.
+        if deaths == 0 {
+            gc.reportAchievement(id: GameCenterManager.ID.noDeathRun)
         }
         // All-of-world cleared
         if level.world == 0 {

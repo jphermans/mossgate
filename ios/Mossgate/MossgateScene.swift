@@ -2010,7 +2010,8 @@ final class MossgateScene: SKScene {
         Achievements.levelCleared(level,
                                   coins: coinsGot.count,
                                   totalCoins: totalCoins,
-                                  allCoinsCollected: allCoins)
+                                  allCoinsCollected: allCoins,
+                                  deaths: deathsThisAttempt)
         setState(.win)
         notifyPhase()
     }
