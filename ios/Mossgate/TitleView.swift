@@ -18,6 +18,9 @@ struct TitleView: View {
     let onRestore: () -> Void
 
     @ObservedObject private var settings = SettingsStore.shared
+    /// Read here, not just in the manager: this is what lets the Game Center button say whether
+    /// the player is signed in instead of always claiming to be Game Center and doing nothing.
+    @ObservedObject private var gameCenter = GameCenterManager.shared
     @ObservedObject private var store = Store.shared
     /// Which world is expanded. Test hook `-CollapseWorlds 1` starts with none of
     /// them open, so every world card and the purchase card fit on one screen for a
@@ -111,7 +114,12 @@ struct TitleView: View {
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         Button(action: onOpenGameCenter) {
-                            Label("Game Center", systemImage: "trophy")
+                            // Says what tapping it will do. The manager publishes the sign-in
+                            // state and nothing read it, so a signed-out player saw a button
+                            // labelled "Game Center", tapped it, and got no feedback at all —
+                            // the tap re-attempts sign-in and returns silently either way.
+                            Label(gameCenter.isAuthenticated ? "Game Center" : "Sign in",
+                                  systemImage: "trophy")
                                 .frame(maxWidth: .infinity, minHeight: 48)
                                 .background(
                                     RoundedRectangle(cornerRadius: 14)
