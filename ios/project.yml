@@ -20,8 +20,8 @@ settings:
     #   ./scripts/bump-ios-version.py --patch    # 0.1.0 -> 0.1.1  (bugfix batch)
     #   ./scripts/bump-ios-version.py --minor    # 0.1.0 -> 0.2.0  (new features)
     # The script rewrites these two lines and re-runs xcodegen.
-    MARKETING_VERSION: "0.7.32"
-    CURRENT_PROJECT_VERSION: "55"
+    MARKETING_VERSION: "0.7.33"
+    CURRENT_PROJECT_VERSION: "56"
     SWIFT_STRICT_CONCURRENCY: minimal
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
@@ -60,6 +60,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.jphsystems.mossgate
-        TARGETED_DEVICE_FAMILY: "1,2"
+        TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: MossgateDusk
