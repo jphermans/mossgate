@@ -40,6 +40,15 @@ struct RootView: View {
                         gameLevelIndex = idx
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
                     },
+                    onStartDaily: { idx in
+                        // Deliberately not guarded. The daily is free for everyone by design,
+                        // and the gate it lives on is behind the progression chain, so the
+                        // ordinary unlock check would refuse it — which is precisely what
+                        // happened, silently: "nothing happens when I tap daily".
+                        SettingsStore.shared.startDailyRun()
+                        gameLevelIndex = idx
+                        withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
+                    },
                     onOpenSetup: { showSetup = true },
                     onOpenHelp: { showHelp = true },
                     onOpenGameCenter: {

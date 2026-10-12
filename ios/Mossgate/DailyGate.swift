@@ -33,10 +33,13 @@ enum DailyGate {
 
     /// Which gate of the day's set is today's.
     ///
-    /// Rotates by day so it is not the same slot every time, and sits in a mid-difficulty world
-    /// so a player meeting it early is not thrown straight at the hardest thing in the game.
-    static let world = 2
-    static var slot: Int { dayNumber() % Worlds.gatesPerWorld }
+    /// The FREE world's generated slots, deliberately. It has to be free for everyone, and the
+    /// world's first three slots are hand-authored — a fixed gate, the same every day — so the
+    /// generated ones are the only slots in it that the seed can actually vary. Sitting it in a
+    /// paid world was the first version's mistake: the launch was refused by the paywall, and
+    /// the tap appeared to do nothing.
+    static let world = 0
+    static var slot: Int { 3 + dayNumber() % 3 }
     /// Index into the seed's gate list.
     static var gateIndex: Int { world * Worlds.gatesPerWorld + slot }
 

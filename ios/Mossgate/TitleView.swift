@@ -3,6 +3,12 @@ import SwiftUI
 /// Title screen — lists worlds and their levels, with a setup button.
 struct TitleView: View {
     let onStartLevel: (Int) -> Void
+    /// Start today's Daily Gate.
+    ///
+    /// Separate from `onStartLevel` because it deliberately skips the unlock check: the daily is
+    /// free for everyone, but the gate it lives on is still behind the progression chain, so
+    /// going through the ordinary path refuses it and the tap does nothing.
+    let onStartDaily: (Int) -> Void
     let onOpenSetup: () -> Void
     let onOpenHelp: () -> Void
     let onOpenGameCenter: () -> Void
@@ -290,7 +296,7 @@ struct TitleView: View {
         let streakWord = streak == 1 ? "day" : "days"
         return Button {
             settings.startDailyRun()
-            onStartLevel(DailyGate.gateIndex)
+            onStartDaily(DailyGate.gateIndex)
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 10) {
