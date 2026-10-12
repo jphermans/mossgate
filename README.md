@@ -3,7 +3,7 @@
 A 2D dusk-ruins platformer for iPhone. Native SwiftUI + SpriteKit + GameKit, built by
 [JPHsystems](https://github.com/jphermans).
 
-**0.7.4 (build 27)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · portrait splash,
+**0.7.6 (build 29)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · portrait splash,
 landscape gameplay
 
 Public support, privacy and changelog page: <https://jphermans.github.io/mossgate-support/>
@@ -186,6 +186,7 @@ cannot be scripted.
 | `-OpenResetConfirm 1` | open straight into the reset card |
 | `-CompleteWorld <n>` | mark world `n` cleared, in memory only |
 | `-WinNow 1` | clear the current gate for real (persists) |
+| `-TestCoinSprites 1` | every coin is drawn where it can be taken, then takes one and checks it leaves the screen |
 
 Rules for these: they must **measure**, not assert — print the before and after. They must be
 read from `ProcessInfo` at the point of use, so no state leaks between runs. And they must
