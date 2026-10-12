@@ -335,6 +335,16 @@ struct TitleView: View {
 
 /// Reads CFBundleShortVersionString / CFBundleVersion from the main bundle.
 enum AppInfo {
+    /// Public pages, and the only place these URLs are written down.
+    ///
+    /// The first two are exactly what App Store Connect lists as the Support URL and the
+    /// Privacy Policy URL. Kept as constants so the listing, this screen, and anything that
+    /// quotes them later cannot drift apart — Apple re-checks these URLs after submission,
+    /// so a 404 is a review risk rather than a copy nit.
+    static let supportURL = URL(string: "https://jphermans.github.io/mossgate-support/")!
+    static let privacyURL = URL(string: "https://jphermans.github.io/mossgate-support/#privacy")!
+    static let changelogURL = URL(string: "https://jphermans.github.io/mossgate-support/#changelog")!
+
     static var shortVersion: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "?"
     }

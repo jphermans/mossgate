@@ -204,10 +204,55 @@ struct AboutView: View {
                     .foregroundStyle(Color("MossgateMuted"))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+
+            divider
+
+            // Reachable from inside the app, which is what a reviewer looks for: a support
+            // route and a privacy policy that are live, not placeholders. Same URLs the store
+            // listing carries.
+            linkRow("Support",
+                    "Questions, bug reports, and the changelog for every release.",
+                    AppInfo.supportURL, symbol: "lifepreserver")
+            divider
+            linkRow("Privacy Policy",
+                    "What the game does and does not collect.",
+                    AppInfo.privacyURL, symbol: "hand.raised")
         }
     }
 
     // MARK: - Building blocks
+
+    /// An external link, styled to sit alongside the info rows.
+    ///
+    /// A `Link` rather than a Button calling `UIApplication.shared.open`, so it picks up the
+    /// platform's own affordances — long-press preview, open-in-background, and correct
+    /// handling if the URL is ever unreachable.
+    private func linkRow(_ title: String, _ detail: String,
+                         _ url: URL, symbol: String) -> some View {
+        Link(destination: url) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color("MossgateLantern"))
+                    .frame(width: 38)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color("MossgateCream"))
+                    Text(detail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color("MossgateMuted"))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color("MossgateMuted"))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+    }
 
     /// One of the game's own sprite images. Interpolation is off so the pixel art
     /// stays crisp instead of being smeared by the scaler.
