@@ -21,26 +21,31 @@ struct TitleView: View {
 
     var body: some View {
         ZStack {
-            Color("MossgateDusk").ignoresSafeArea()
-            // The start page's backdrop: the painted lantern-bearer, blurred back and dimmed so
-            // it reads as atmosphere rather than as a picture the cards are sitting on top of.
-            // Every choice here is about the UI staying legible over it — a hero image you can
-            // still read gate names against. The slight scale hides the clipped edge of the
-            // blur, which otherwise draws a soft rectangle just inside the screen.
-            Image("TitleBackdrop")
-                .resizable()
-                .scaledToFill()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .scaleEffect(1.12)
-                // Blur tuned down from 18: at that radius, in a landscape frame cropping a
-                // square painting, the figure dissolved into a formless wash of colour rather
-                // than reading as something you can half make out. Vague is the brief; a
-                // smudge is not.
-                .blur(radius: 9)
-                .saturation(0.9)
-                .opacity(0.6)
-                .clipped()
+            // The backdrop is attached as a BACKGROUND of the base colour, not as a ZStack
+            // sibling.
+            //
+            // As a sibling it becomes part of the stack's layout: a scaledToFill image asking
+            // for the whole screen makes the stack's ideal size unbounded, and the ScrollView
+            // next to it then has nothing to scroll. That is the report — "i can not scroll to
+            // the setup page anymore on the start page" — and the Setup entry lives at the
+            // bottom of that scroll.
+            //
+            // A background is laid out against the view it decorates and cannot affect its
+            // siblings at all, which is the whole reason to use one here. It also covers the
+            // safe areas for free, without the scale-and-clip dance the sibling version needed
+            // to hide the clipped edge of its blur.
+            Color("MossgateDusk")
                 .ignoresSafeArea()
+                .background(
+                    Image("TitleBackdrop")
+                        .resizable()
+                        .scaledToFill()
+                        .scaleEffect(1.08)
+                        .blur(radius: 9)
+                        .saturation(0.9)
+                        .opacity(0.6)
+                )
+                .clipped()
             duskGradient
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
