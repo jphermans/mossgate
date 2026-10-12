@@ -147,7 +147,7 @@ fi
 say "=== ExportOptions.plist ==="
 if [ -f "$IOS_DIR/ExportOptions.plist" ]; then
   if grep -q 'YOUR_TEAM_ID' "$IOS_DIR/ExportOptions.plist"; then
-    miss "present but teamID is still the YOUR_TEAM_ID placeholder. THIS ONE IS YOURS, not the code's: only you can read your team ID off the Apple Developer portal. Nothing uploads until it is real."
+    miss "teamID is still the YOUR_TEAM_ID placeholder. THIS ONE IS YOURS, not the code's. It only affects the scripted export (xcodebuild -exportArchive) — Xcode's Organizer upload ignores this file entirely — so set it before using the command-line path."
   else
     ok "present with a teamID set"
   fi
