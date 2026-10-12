@@ -166,6 +166,7 @@ cannot be scripted.
 | flag | what it does |
 | --- | --- |
 | `-SkipSplash 1` | skip the splash screen |
+| `-ForceClosed 1` / `-ForceOpen 1` | Pretend an iPhone Duo is shut or open, so the outer-display portrait layout and the refusal to start a run can be exercised on any simulator. |
 | `-StartInLevel <n>` | jump straight into gate `n` |
 | `-Seed <n>` | force the run seed, for comparing two worlds |
 | `-OpenSetup 1` / `-OpenHelp 1` | present that sheet on the title screen |
