@@ -1634,6 +1634,30 @@ final class MossgateScene: SKScene {
         if ProcessInfo.processInfo.arguments.contains("-WinNow"), toState == .play {
             win()
         }
+        // -TestPlacement 1 walks every gate and reports anything not resting on something. A
+        // floating pickup reads as a bug in play even when it looks deliberate in a screenshot,
+        // and nothing else checks it: the generator's audit covers geometry — whether a ledge is
+        // reachable — rather than where the pickups ended up.
+        if ProcessInfo.processInfo.arguments.contains("-TestPlacement") {
+            var bad: [String] = []
+            var checked = 0
+            func check(_ p: CGPoint, _ what: String, _ g: Level) {
+                checked += 1
+                guard let h = Autopilot.heightAboveGround(of: p, in: g) else {
+                    bad.append("gate \(g.id) \"\(g.name)\" \(what): nothing underneath at all")
+                    return
+                }
+                if h > 40 { bad.append("gate \(g.id) \"\(g.name)\" \(what) floats \(Int(h)) above the surface") }
+            }
+            for g in Levels.all {
+                for (i, l) in g.lanterns.enumerated() { check(CGPoint(x: l.x, y: l.y), "lantern \(i)", g) }
+                check(g.flag, "flag", g)
+                for (i, c) in g.checkpoints.enumerated() { check(CGPoint(x: c.x, y: c.y), "waystone \(i)", g) }
+                for (i, c) in g.coins.enumerated() { check(CGPoint(x: c.x, y: c.y), "coin \(i)", g) }
+            }
+            print("[Mossgate:PLACE] checked \(checked) items over \(Levels.all.count) gates — \(bad.count) problem(s)")
+            for b in bad.prefix(30) { print("[Mossgate:PLACE]   \(b)") }
+        }
         // -TestSeed 1: report what the run seed actually changed, so variation is
         // checkable rather than asserted.
         if ProcessInfo.processInfo.arguments.contains("-TestSeed") {

@@ -95,7 +95,7 @@ enum LevelGen {
         // 0.30 hazards + 0.30 gap leaves 0.40 for the two step branches.
         let scale = raw > 0.30 ? 0.30 / raw : 1
         return Profile(
-            width: 3200 + w * 420,
+            width: 4640 + w * 609,
             height: 760 + (world % 2 == 1 ? 160 : 0),
             groundY: 512,
             gapMax: min(maxGap, 96 + w * 11),
@@ -245,7 +245,12 @@ enum LevelGen {
 
             if x - lastCheckpoint > 900 {
                 checkpoints.append(Checkpoint(x: x - 60, y: gy - 40))
-                lanterns.append(Lantern(x: x - 200, y: gy - 52))
+                // Half the sprite's drawn height, so its base rests on the grass. It was 52,
+                // which put the bottom of a 34-tall sprite 17 above the ground: a pickup
+                // hovering by about its own height, which is exactly the kind of gap the eye
+                // catches even when nobody can say why. Measured, not guessed — the node is
+                // 34x34 and centred, and this audit is what found it.
+                lanterns.append(Lantern(x: x - 200, y: gy - 17))
                 lastCheckpoint = x
             }
         }
