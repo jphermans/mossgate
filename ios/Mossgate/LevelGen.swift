@@ -79,15 +79,30 @@ enum LevelGen {
     /// thing growing after that would be unfairness.
     static func profile(world: Int) -> Profile {
         let w = CGFloat(max(0, min(world, 5)))
+        // The three hazard chances share a fixed budget, small enough to leave the shapes that
+        // come after them in the roll a share of the gate.
+        //
+        // They used to be used raw, and by world 3 they summed past 1.0. Since every feature is
+        // chosen by `roll <` a running total, a total past 1.0 means the branches below it are
+        // UNREACHABLE — the step up and step down became dead code, and worlds 2-5 generated as
+        // flat ground with gaps and brambles. The game got easier the further in you went.
+        // Reported as "the game is still to easy", with a screenshot of a flat gate, and visible
+        // in the level audit as `step=0` for every world from 2 up.
+        let rawSpike = min(0.42, 0.14 + w * 0.06)
+        let rawMover = min(0.30, 0.08 + w * 0.045)
+        let rawLedge = min(0.26, 0.06 + w * 0.04)
+        let raw = rawSpike + rawMover + rawLedge
+        // 0.30 hazards + 0.30 gap leaves 0.40 for the two step branches.
+        let scale = raw > 0.30 ? 0.30 / raw : 1
         return Profile(
             width: 2400 + w * 300,
             height: 760 + (world % 2 == 1 ? 160 : 0),
             groundY: 512,
             gapMax: min(maxGap, 96 + w * 11),
             stepMax: min(maxStepUp, 66 + w * 9),
-            spikeChance: min(0.42, 0.14 + w * 0.06),
-            moverChance: min(0.30, 0.08 + w * 0.045),
-            ledgeChance: min(0.26, 0.06 + w * 0.04)
+            spikeChance: rawSpike * scale,
+            moverChance: rawMover * scale,
+            ledgeChance: rawLedge * scale
         )
     }
 
