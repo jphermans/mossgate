@@ -177,6 +177,17 @@ struct RootView: View {
                     if ProcessInfo.processInfo.arguments.contains("-TestSfx") {
                         AudioEngine.shared.runSfxProbe()
                     }
+                    // Seed the pose from the scene's own geometry BEFORE any orientation lock is
+                    // applied.
+                    //
+                    // The representable's report only arrives after the first layout, so without
+                    // this the opening move on a folded Duo is a landscape mask on a portrait
+                    // display — which is a black screen. That is the exact fault this whole
+                    // mechanism exists to prevent, and it happened on launch rather than on the
+                    // fold, which is why it survived the earlier testing.
+                    if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+                        duoPose = DuoPose.fromWindowSize(scene.coordinateSpace.bounds.size)
+                    }
                     AppDelegate.orientationLock = .portrait
                     let args = ProcessInfo.processInfo.arguments
                     // Test hook: -ForceClosed 1 / -ForceOpen 1 pretend the Duo is shut or open,
