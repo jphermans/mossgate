@@ -214,6 +214,9 @@ struct RootView: View {
         .onChange(of: phase) { _, _ in applyOrientationLock() }
         .onAppear {
                     wireController()
+                    // Warm the taptic engine up front, so the first jump of a session is felt as
+                    // clearly as the hundredth rather than arriving while the engine is cold.
+                    Haptics.warmUp()
                     Store.shared.start()
                     // Test hook: -TestSfx 1 renders every effect through the real
                     // audio graph offline and reports the level that comes out.
