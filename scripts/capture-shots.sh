@@ -56,7 +56,14 @@ IPHONE_UDID="175BC23E-E750-4F8B-BC55-77EFDCB793E1"
 #
 # iPad is gone: the app targets the iPhone device family, so it does not run on iPad and
 # Apple does not require an iPad set. See the note at the top if that ever changes.
-IPHONE_SHOT="2796x1290"
+# iPhone is the 6.9" class: Apple's required slot for 2026 submissions, native 1320x2868
+# portrait, so 2868x1320 landscape. The 6.7" set is built alongside it because older guidance
+# named 2796x1290 as the requirement and sources still disagree about which is accepted alone;
+# both come from the same captures, so there is no reason to guess. A 16 Pro captures
+# 1206x2622 (a 6.3" class, optional when a larger set exists), and forcing it up is a ~0.3%
+# aspect change, below what an eye can see.
+IPHONE_SHOT="2868x1320"
+IPHONE_SHOT_67="2796x1290"
 
 mkdir -p "$TMP"
 
@@ -176,7 +183,8 @@ main() {
   boot "$IPHONE_UDID"
   xcrun simctl install "$IPHONE_UDID" "$app" >/dev/null 2>&1
 
-  pack "$IPHONE_UDID" "$OUT/iphone-6.7" "$IPHONE_SHOT"
+  pack "$IPHONE_UDID" "$OUT/iphone-6.9" "$IPHONE_SHOT"
+  pack "$IPHONE_UDID" "$OUT/iphone-6.7" "$IPHONE_SHOT_67"
 
   say ""
   say "=== verify: the size must match to the pixel, and alpha must be off ==="
@@ -188,8 +196,8 @@ main() {
     a=$(sips -g hasAlpha    "$f" 2>/dev/null | awk '/hasAlpha/{print $2}')
     local want="ok"
     case "$f" in
+      *iphone-6.9*) [ "$w $h" = "2868 1320" ] || want="WRONG SIZE" ;;
       *iphone-6.7*) [ "$w $h" = "2796 1290" ] || want="WRONG SIZE" ;;
-      *ipad-12.9*)  [ "$w $h" = "2732 2048" ] || want="WRONG SIZE" ;;
     esac
     [ "$a" = "no" ] || want="HAS ALPHA"
     if [ "$want" != "ok" ]; then

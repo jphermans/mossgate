@@ -181,8 +181,8 @@ for dir in AppStore/Screenshots/*/; do
   [ -d "$dir" ] || continue
   name=$(basename "$dir")
   case "$name" in
-    iphone-6.7) want="2796 1290" ;;
     iphone-6.9) want="2868 1320" ;;
+    iphone-6.7) want="2796 1290" ;;
     *) say "  note  $name — not a pack size this check knows"; continue ;;
   esac
   # Accept PNG or JPEG: both are allowed, and the rig falls back to JPEG when PIL is absent.
