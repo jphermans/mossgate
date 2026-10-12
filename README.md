@@ -3,7 +3,7 @@
 A 2D dusk-ruins platformer for iPhone. Native SwiftUI + SpriteKit + GameKit, built by
 [JPHsystems](https://github.com/jphermans).
 
-**0.6.0 (build 16)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · portrait splash,
+**0.7.4 (build 27)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · portrait splash,
 landscape gameplay
 
 Public support, privacy and changelog page: <https://jphermans.github.io/mossgate-support/>
@@ -105,23 +105,46 @@ shows the seed and can reshuffle live.
 The one thing that never changes is the platform geometry — those layouts are hand-designed
 and provably reachable, and a reshuffle must not be able to hand you an impossible jump.
 
-### 2. Coins are placed by an autonomous runner
+### 2. Coins are placed for a jump, and cannot be out of reach
 
 `ios/Mossgate/Autopilot.swift` holds `Sim`, a headless replica of the player physics with no
-nodes, no audio and no display, so a whole level plays in milliseconds. Two things sit on it:
+nodes, no audio and no display, so a whole level plays in milliseconds. Coin placement runs on
+it in three steps, in order of preference:
 
-- **`run(level:phase:period:)`** — a runner that plays start-to-gate and returns its path.
-  Coins are sampled along that path by **arc length**, not by index: the path is recorded once
-  per 1/120 s substep, so indexing would bunch coins at the top of every jump.
-- **`reachable(from:...)` / `variedCoin(near:...)`** — a ballistic reachability probe, used
-  when the runner cannot finish. It stands the player on the surface under a coin's authored
-  position, fires the sensible launches, and collects every position the player's centre
-  passed through. The coin goes somewhere on that arc.
+1. **A random spot an ordinary jump can take.** A random x along the gate, hung 45–95 above
+   the topmost surface there — above the player's 32-unit height, so walking past never takes
+   it. Measured from the *topmost* surface because that is the one the proof stands on;
+   measuring from the floor instead let a coin hang over a pit the proof never used.
+2. **The level's own position**, if that one passes the proof.
+3. **A guaranteed grab.** 14 above the nearest surface, which is inside the player's standing
+   pickup radius. Arithmetic, not a simulation, so it cannot fail.
 
-Both give the same guarantee, which is the entire point: **a coin sits where a simulated
-player physically was**, so no reshuffle can strand one behind a jump that cannot be made.
+Steps 1 and 2 are proofs and can run out of budget; step 3 is why the invariant holds whatever
+happens. `-TestCoins 1` asserts it: `notCollectible 0` and `unplaced 0` across all 36 gates,
+with `belowHeadHeight 0` everywhere — no coin in the game can be taken by walking through it.
 
-Measured state of the runner, from `-TestAutopilot 1`:
+The proof is deliberately a **single** jump (`singleJumpOnly`). An earlier version accepted a
+precisely timed double jump, which is technically reachable and in practice reads as jumping at
+a coin and nothing happening.
+
+**Two bounds, both load-bearing.** A layout is computed on the main thread inside a level load,
+so it has a 250 ms deadline and a proof budget. The first version had neither and tried up to 60
+candidate spots per coin with a full proof each — roughly 400,000 simulation steps for one coin
+— and iOS terminated the app with `Thread 1: signal SIGTERM`. Cost is printed per gate and now
+runs 0–7 ms.
+
+Layouts are keyed on level, run seed **and an attempt counter**, bumped on a retry and on
+arriving at a different gate. A layout pass re-entering `startLevel` deliberately does *not*
+bump it: that is what keeps the coins still while the view resizes, without making them
+identical on a second attempt. If a gate is going too easily — 20 s in, no death this attempt,
+60% of the coins taken — the coins you have not collected move to new spots once, with a small
+warm burst so the change is noticed.
+
+### 2b. The runner, still here as an attract mode
+
+The same simulation carries `run(level:phase:period:)`, an autonomous player that plays
+start-to-gate and returns its path. It no longer places coins, but the policy is the seed of an
+attract mode. Measured from `-TestAutopilot 1`:
 
 | level | result |
 | --- | --- |
@@ -129,10 +152,8 @@ Measured state of the runner, from `-TestAutopilot 1`:
 | 1–4 | walks into a bramble around t≈5–7 s |
 | 5–6 | falls past the kill plane around t≈3–5 s |
 
-**1 of 7 solved.** So Wick Road samples coins from the route and every other level uses the
-probe. The policy is the weak part, not the simulation: it only looks for brambles near its
-feet, so it walks into ones it is about to land on. Improving it raises that number, and every
-level it starts solving converts from probe to route automatically.
+**1 of 7 solved.** The policy is the weak part, not the simulation: it only looks for brambles
+near its feet, so it walks into ones it is about to land on.
 
 ### 3. Test hooks
 
@@ -155,6 +176,16 @@ cannot be scripted.
 | `-TestGamepad 1` | assert the controller mappings |
 | `-TestSfx 1` | fire the sound effects |
 | `-PlaceAt x,y` | teleport the player, for photographing a part of a level |
+| `-TestCoins 1` | every placed coin against the game's own pickup rule, with one ordinary jump |
+| `-TestLevelGen 1` | generate every gate for this seed and report clearance and pits |
+| `-TestProgress 1` | save progress, tear the gate down, reload it, report the round trip |
+| `-TestEdge 1` | the foothold rule either side of its boundary |
+| `-TestSettings 1` | report the stored preferences; `-TestSettings set` changes them and resets progress first |
+| `-CollapseWorlds 1` | collapse every world card on the title screen, for screenshots |
+| `-UnlockFullGame 1` | pretend the Full Game is owned, for screenshots |
+| `-OpenResetConfirm 1` | open straight into the reset card |
+| `-CompleteWorld <n>` | mark world `n` cleared, in memory only |
+| `-WinNow 1` | clear the current gate for real (persists) |
 
 Rules for these: they must **measure**, not assert — print the before and after. They must be
 read from `ProcessInfo` at the point of use, so no state leaks between runs. And they must
