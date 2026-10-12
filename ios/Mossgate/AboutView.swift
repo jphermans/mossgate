@@ -41,6 +41,7 @@ struct AboutView: View {
 
                             VStack(alignment: .leading, spacing: 22) {
                                 legend
+                                seedSection
                                 worlds
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -138,6 +139,39 @@ struct AboutView: View {
                     sprite("block", size: 34)
                     sprite("ledge", size: 34)
                 }
+            }
+        }
+    }
+
+    // MARK: - The run seed
+
+    /// The seed is the one part of the game that is not a mechanic, so it sits in its own
+    /// section rather than in the legend. It is written from what useSeed actually does, not from
+    /// what a seed ought to do: it regrows the gates and leaves cleared/bestCoins alone, and
+    /// those are keyed per gate number, so a shuffle keeps your clears pointing at the same
+    /// slots while the gates under them change. Worth saying plainly — a shuffle that looks
+    /// like it kept your progress is the kind of thing a player should be told, not discover.
+    private var seedSection: some View {
+        section("The run seed") {
+            infoRow(title: "Run seed",
+                    detail: "The number the gates are built from. The same seed always builds the same climb, so a seed is how you hand someone your exact set of gates.") {
+                Image(systemName: "number")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color("MossgateLantern"))
+            }
+            divider
+            infoRow(title: "Shuffling",
+                    detail: "Builds a fresh climb. Your clears and best counts stay where they are — they are kept per gate number, not per seed, so a shuffled climb starts with the marks the old one left.") {
+                Image(systemName: "shuffle")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color("MossgateLantern"))
+            }
+            divider
+            infoRow(title: "Passing one on",
+                    detail: "In Setup, share your seed or type someone else's in. The gates are rebuilt from it as soon as it is set, and the number is remembered next time you open the game.") {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(Color("MossgateLantern"))
             }
         }
     }
