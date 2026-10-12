@@ -21,20 +21,41 @@ struct RootView: View {
 
     enum Phase: Equatable { case splash, title, game }
 
+    /// The one sentence the app says when the phone is shut. One place, because two copies of a
+    /// message drift the moment either is edited.
+    private var foldedNotice: String {
+        "Open your iPhone Duo to play — Mossgate runs on the inner display."
+    }
+
+    /// Leaving the splash.
+    ///
+    /// The single place that decides it, because there are two ways to ask: the button and the
+    /// whole-screen tap, both of which arrive through `onContinue`, plus the test hook that
+    /// stands in for a tap. A rule repeated at three call sites drifts.
+    ///
+    /// Closed, the Duo shows this screen and nothing else. The outer display introduces the game
+    /// but cannot host it, so rather than letting the player into a level list they cannot use,
+    /// the tap says what to do instead.
+    private func beginFromSplash() {
+        guard duoPose.canPlay else {
+            SettingsStore.shared.notice = foldedNotice
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.35)) { phase = .title }
+    }
+
     /// The single place that decides whether a run may start, which is why it is a function
     /// and not two guards: the level cards and the daily card both come through here, and a
     /// rule repeated at two call sites is a rule that drifts.
     ///
-    /// Closed, the outer display is portrait — comfortable for the splash and the level list,
-    /// the wrong shape for a landscape canvas. Refusing before the tap is accepted, rather
-    /// than after a level has loaded, is the point: a run you cannot see is worse than a
-    /// refusal you can read.
+    /// Closed, this should be unreachable — `beginFromSplash` keeps the level list away — but it
+    /// stays as the backstop, because "the menu requires an open phone" is the actual rule and
+    /// this is where a run is actually started.
     private func refuseIfFolded() -> Bool {
         guard !duoPose.canPlay else { return false }
         // Goes through the existing single alert channel rather than adding a second `.alert`
         // to this view — the file already notes that two alerts compete for the same parent.
-        SettingsStore.shared.notice =
-            "Open your iPhone Duo to play — Mossgate runs on the inner display."
+        SettingsStore.shared.notice = foldedNotice
         return true
     }
 
@@ -56,9 +77,7 @@ struct RootView: View {
 
             switch phase {
             case .splash:
-                SplashView {
-                    withAnimation(.easeInOut(duration: 0.35)) { phase = .title }
-                }
+                SplashView { beginFromSplash() }
                 .transition(.opacity)
             case .title:
                 TitleView(
@@ -212,10 +231,12 @@ struct RootView: View {
                     // Test hook: -ShowNotice 1 raises the app's own alert at launch, so the
                     // styled panel can be inspected without a simulator tap. The simulator
                     // cannot press a gate card, and this is the only visible path to it.
-                    if args.contains("-ShowNotice") {
-                        SettingsStore.shared.notice =
-                            "Open your iPhone Duo to play — Mossgate runs on the inner display."
-                    }
+                    if args.contains("-ShowNotice") { SettingsStore.shared.notice = foldedNotice }
+                    // Test hook: -TapBegin 1 does what "Tap to begin" does, through the same
+                    // function the button and the whole-screen tap use. The simulator cannot tap,
+                    // so without this the splash's gate would be unverifiable — and routing it
+                    // through `beginFromSplash` means it cannot drift from the real path.
+                    if args.contains("-TapBegin"), phase == .splash { beginFromSplash() }
                     // Test hook: -OpenSetup 1 lands on the title screen with the
                     // Setup sheet already presented (used to verify the sheet
                     // wiring without a simulator tap).
