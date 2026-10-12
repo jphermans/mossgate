@@ -3,7 +3,7 @@
 A 2D dusk-ruins platformer for iPhone. Native SwiftUI + SpriteKit + GameKit, built by
 [JPHsystems](https://github.com/jphermans).
 
-**0.7.35 (build 58)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · iPhone · portrait
+**0.7.36 (build 59)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · iPhone · portrait
 landscape gameplay
 
 Public support, privacy and changelog page: <https://jphermans.github.io/mossgate-support/>
@@ -167,6 +167,8 @@ cannot be scripted.
 | --- | --- |
 | `-SkipSplash 1` | skip the splash screen |
 | `-ForceClosed 1` / `-ForceOpen 1` | Pretend an iPhone Duo is shut or open, so the outer-display portrait layout and the refusal to start a run can be exercised on any simulator. |
+| `-ShowNotice 1` | Raise the app's own alert at launch, so the styled panel can be inspected without a tap. |
+| `-ForceCloseAfter <s>` | Open, then fold the Duo `s` seconds in — the only way to exercise closing returning to the splash, since the simulator cannot fold. |
 | `-StartInLevel <n>` | jump straight into gate `n` |
 | `-Seed <n>` | force the run seed, for comparing two worlds |
 | `-OpenSetup 1` / `-OpenHelp 1` | present that sheet on the title screen |

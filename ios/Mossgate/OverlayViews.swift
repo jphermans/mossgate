@@ -202,7 +202,7 @@ private struct ControlButton: View {
     }
 }
 
-private struct PressableButtonStyle: ButtonStyle {
+struct PressableButtonStyle: ButtonStyle {
     @Binding var pressed: Bool
     let onPress: () -> Void
     let onRelease: () -> Void

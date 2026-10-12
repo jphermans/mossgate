@@ -132,15 +132,17 @@ struct RootView: View {
         .onReceive(SettingsStore.shared.$controllerOn) { on in
             session.scene?.setControllerEnabled(on)
         }
-        // One alert for both channels: a Store message and a gameplay notice would
-        // otherwise be two alerts competing for the same view.
-        .alert("Mossgate", isPresented: Binding(
-            get: { store.message != nil || SettingsStore.shared.notice != nil },
-            set: { if !$0 { store.message = nil; SettingsStore.shared.notice = nil } }
-        )) {
-            Button("OK") { store.message = nil; SettingsStore.shared.notice = nil }
-        } message: {
-            Text(store.message ?? SettingsStore.shared.notice ?? "")
+        // One channel for both: a Store message and a gameplay notice would otherwise be two
+        // alerts competing for the same view. Drawn in the game's own style rather than the
+        // system's — see MossgateAlert.
+        .overlay {
+            if let message = store.message ?? SettingsStore.shared.notice {
+                MossgateAlert(message: message) {
+                    store.message = nil
+                    SettingsStore.shared.notice = nil
+                }
+                .transition(.opacity)
+            }
         }
         // A reshuffle rebuilds the current level so the new world is visible
         // immediately. Setup is only reachable from the title screen, so no
@@ -148,11 +150,25 @@ struct RootView: View {
         .onReceive(SettingsStore.shared.$runSeed) { _ in
             session.scene?.retryLevel()
         }
+        .onChange(of: duoPose) { _, newPose in
+            applyOrientationLock()
+            // Closing the phone returns to the splash.
+            //
+            // The outer display introduces the game but cannot host a run, so leaving whatever
+            // was on screen sitting behind it would be worse than showing the app's own front
+            // door. Going through `leaveToSplash()` rather than setting `phase` directly is the
+            // part that matters: it calls `leaveCurrentGate()` first, which SAVES the gate's
+            // progress, so folding the phone mid-run costs nothing and reopening and returning
+            // to that gate carries on where it left off.
+            //
+            // Only fires on the transition into `.closed`, so the player can still fold the
+            // phone, see the splash, tap through and browse the level list with it shut.
+            if newPose == .closed, phase != .splash { leaveToSplash() }
+        }
+        // The mask also has to follow the phase — portrait while the splash is up,
+        // landscape for the level list and the game. The handler above covers the display
+        // changing underneath; this covers the app moving between its own screens.
         .onChange(of: phase) { _, _ in applyOrientationLock() }
-        // Opening or closing the Duo moves the UI to the other display, so the mask has to be
-        // re-applied then as well — reacting only to a phase change would leave a newly closed
-        // Duo showing the level list in landscape on a portrait surface.
-        .onChange(of: duoPose) { _, _ in applyOrientationLock() }
         .onAppear {
                     wireController()
                     Store.shared.start()
@@ -168,8 +184,27 @@ struct RootView: View {
                     // simulator. The simulator exposes one framebuffer per display but has no
                     // headless way to fold the device, so without these the closed path would
                     // be unverifiable on this machine.
-                    if args.contains("-ForceClosed") { duoPose = .closed }
-                    else if args.contains("-ForceOpen") { duoPose = .open }
+                    if args.contains("-ForceClosed") { DuoPose.forced = .closed; duoPose = .closed }
+                    else if args.contains("-ForceOpen") { DuoPose.forced = .open; duoPose = .open }
+                    // Test hook: -ForceCloseAfter <seconds> opens first, then folds part-way
+                    // through the session. The interesting behaviour is the TRANSITION into
+                    // closed — returning to the splash and saving the run — and the simulator
+                    // cannot fold the device, so without this the rule would only ever be
+                    // exercised in its initial state, which is the case that already worked.
+                    else if let ci = args.firstIndex(of: "-ForceCloseAfter"),
+                            ci + 1 < args.count, let secs = Double(args[ci + 1]) {
+                        DuoPose.forced = .open; duoPose = .open
+                        DispatchQueue.main.asyncAfter(deadline: .now() + secs) {
+                            DuoPose.forced = .closed; duoPose = .closed
+                        }
+                    }
+                    // Test hook: -ShowNotice 1 raises the app's own alert at launch, so the
+                    // styled panel can be inspected without a simulator tap. The simulator
+                    // cannot press a gate card, and this is the only visible path to it.
+                    if args.contains("-ShowNotice") {
+                        SettingsStore.shared.notice =
+                            "Open your iPhone Duo to play — Mossgate runs on the inner display."
+                    }
                     // Test hook: -OpenSetup 1 lands on the title screen with the
                     // Setup sheet already presented (used to verify the sheet
                     // wiring without a simulator tap).
