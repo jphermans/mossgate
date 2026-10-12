@@ -254,7 +254,15 @@ struct TitleView: View {
                         let open = settings.gateUnlocked(level.id)
                         Button {
                             guard open else {
-                                settings.notice = "Finish the gate before it to open this one."
+                                // This is the guard that actually fires — the row intercepts
+                                // before onStartLevel, so RootView's check is only a backstop.
+                                // Name the gate in the way, in the same voice the locked-world
+                                // tap uses: "Finish the gate before it" was true and did not say
+                                // which gate, on a list where several are locked.
+                                let all = Levels.all
+                                let prev = (level.id > 0 && level.id - 1 < all.count)
+                                    ? all[level.id - 1].name : "the gate before it"
+                                settings.notice = "Finish \(prev) to open this one."
                                 return
                             }
                             onStartLevel(level.id)
