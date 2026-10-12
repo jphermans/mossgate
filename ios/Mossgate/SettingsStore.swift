@@ -133,6 +133,9 @@ final class SettingsStore: ObservableObject {
         let savedBest = (UserDefaults.standard.array(forKey: "bestCoins") as? [Int]) ?? []
         self.bestCoins = (0..<totalLevels).map { savedBest.indices.contains($0) ? savedBest[$0] : 0 }
 
+        self.gateProgress = UserDefaults.standard.data(forKey: "gateProgress")
+            .flatMap { try? JSONDecoder().decode([String: GateSnapshot].self, from: $0) } ?? [:]
+
         self.gates = Levels.build(seed: runSeed)
 
         // Test hook: -CompleteWorld N marks every gate in world N as cleared, so the
@@ -175,12 +178,53 @@ final class SettingsStore: ObservableObject {
 
     var isOutOfLight: Bool { lives <= 0 }
 
+    // ── Where a gate was left ─────────────────────────────────────
+    /// Enough to put the player back where they were.
+    ///
+    /// Reported as: "When leaving game to menu and there is a progression then this
+    /// is not saved. So player have to restart the level complete." The scene already
+    /// held all of this for its checkpoints; the missing part was any of it surviving
+    /// the gate being torn down.
+    struct GateSnapshot: Codable {
+        var coins: [Int]
+        var lanterns: [Int]
+        var checkpoint: Int
+        var x: Double
+        var y: Double
+        /// The run seed the gate was built from. Gates are regenerated every run
+        /// (worlds change on each restart, by design), so a snapshot from another run
+        /// describes geometry that does not exist in this one. It is discarded rather
+        /// than trusted, or the player resumes inside a wall.
+        var seed: Int
+    }
+
+    @Published private(set) var gateProgress: [String: GateSnapshot]
+
+    func gateProgress(for level: Int) -> GateSnapshot? { gateProgress["\(level)"] }
+
+    func saveGateProgress(_ snap: GateSnapshot, level: Int) {
+        gateProgress["\(level)"] = snap
+        persistGateProgress()
+    }
+
+    func clearGateProgress(for level: Int) {
+        guard gateProgress.removeValue(forKey: "\(level)") != nil else { return }
+        persistGateProgress()
+    }
+
+    private func persistGateProgress() {
+        guard let data = try? JSONEncoder().encode(gateProgress) else { return }
+        UserDefaults.standard.set(data, forKey: "gateProgress")
+    }
+
     func markCleared(level: Int, coins: Int) {
         guard level < cleared.count else { return }
         cleared[level] = true
         bestCoins[level] = max(bestCoins[level], coins)
         UserDefaults.standard.set(cleared, forKey: "cleared")
         UserDefaults.standard.set(bestCoins, forKey: "bestCoins")
+        // The gate is finished, so there is nothing to resume into.
+        clearGateProgress(for: level)
     }
 
     func resetProgress() {
@@ -188,6 +232,8 @@ final class SettingsStore: ObservableObject {
         bestCoins = Array(repeating: 0, count: Levels.totalGates)
         UserDefaults.standard.removeObject(forKey: "cleared")
         UserDefaults.standard.removeObject(forKey: "bestCoins")
+        gateProgress = [:]
+        UserDefaults.standard.removeObject(forKey: "gateProgress")
         refillLives()
     }
 }

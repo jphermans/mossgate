@@ -62,6 +62,9 @@ final class MossgateScene: SKScene {
     private var cp: Int = -1
     private var spawnPoint: CGPoint = .zero
     private var checkpointSnap: (point: CGPoint, coins: [Int], cp: Int)?
+    /// Set while a gate is being resumed from a stored snapshot, and consumed by the
+    /// player placement in `loadLevel`.
+    private var pendingResume: CGPoint?
 
     // Touch state
     // On-screen pad state
@@ -283,6 +286,36 @@ final class MossgateScene: SKScene {
         runCoinTestIfRequested()
         runSettingsTestIfRequested()
         runEdgeTestIfRequested()
+        runProgressTestIfRequested()
+    }
+
+    /// Test hook: `-TestProgress 1` puts known progress in the store, tears the gate
+    /// down and loads it again, then reports what came back. That round trip through
+    /// the store is exactly what leaving to the menu and returning does, so it is what
+    /// gets tested rather than the save and the load separately.
+    private func runProgressTestIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestProgress") else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+            guard let self else { return }
+            self.coinsGot = Set([0, 1, 2])
+            self.lanternsGot = Set([0])
+            self.cp = 0
+            self.playerX = 250
+            self.playerY = 400
+            let saved = self.saveProgression()
+            let stored = SettingsStore.shared.gateProgress(for: self.levelIndex)
+            // Reload: this is the "leave to menu and come back" half.
+            self.loadLevel(index: self.levelIndex, toState: .play)
+            let verdict = (self.coinsGot == Set([0, 1, 2]) && self.lanternsGot == Set([0])
+                           && self.cp == 0 && abs(self.playerX - 250) < 0.5
+                           && abs(self.playerY - 400) < 0.5)
+                ? "OK round-trip" : "FAIL lost progress"
+            print("[Mossgate:PROGRESS] saved=\(saved) storedCoins=\(stored?.coins.count ?? -1) "
+                  + "storedCp=\(stored?.checkpoint ?? -99) storedSeed=\(stored?.seed ?? -1) "
+                  + "afterReload coins=\(self.coinsGot.sorted()) "
+                  + "lanterns=\(self.lanternsGot.sorted()) cp=\(self.cp) "
+                  + "x=\(Int(self.playerX)) y=\(Int(self.playerY)) \(verdict)")
+        }
     }
 
     /// Test hook: `-TestEdge 1` stands the player at the edge of the first wide
@@ -915,6 +948,40 @@ final class MossgateScene: SKScene {
         return (phase, period)
     }
 
+    /// Hands this gate's progress to the store, so leaving to the menu does not throw
+    /// it away. Returns false when there is nothing worth keeping — a gate that has
+    /// not been touched should let the next attempt start clean rather than resume at
+    /// the spawn point under a stale snapshot.
+    @discardableResult
+    func saveProgression() -> Bool {
+        guard state == .play || state == .dead else { return false }
+        guard !coinsGot.isEmpty || !lanternsGot.isEmpty || cp >= 0 else {
+            SettingsStore.shared.clearGateProgress(for: levelIndex)
+            return false
+        }
+        SettingsStore.shared.saveGateProgress(
+            SettingsStore.GateSnapshot(
+                coins: Array(coinsGot).sorted(),
+                lanterns: Array(lanternsGot).sorted(),
+                checkpoint: cp,
+                // Saved in placePlayer's convention — x is the centre and y is the
+                // feet — because that is the point the resume feeds back in. Storing
+                // the raw top-left corner put the player half a body left and a whole
+                // body high on every resume, which the round-trip test caught.
+                x: Double(playerX + Phys.playerW / 2),
+                y: Double(playerY + Phys.playerH),
+                seed: SettingsStore.shared.runSeed
+            ),
+            level: levelIndex
+        )
+        return true
+    }
+
+    /// The gate ended by running out of light, so there is nothing to resume into.
+    func discardProgression() {
+        SettingsStore.shared.clearGateProgress(for: levelIndex)
+    }
+
     func retryLevel() { loadLevel(index: levelIndex, toState: .play) }
 
     /// Test hook: `-TestDown 1` measures what the DOWN pad actually changes —
@@ -1158,6 +1225,35 @@ final class MossgateScene: SKScene {
         lanternsGot = []
         cp = -1
         checkpointSnap = nil
+        pendingResume = nil
+
+        // Resume a gate that was left part-way — the fix for "leaving game to menu and
+        // there is a progression then this is not saved". Read after the arrays are
+        // reset so a stale snapshot cannot leak into a fresh gate, and before the
+        // pickups are positioned so what is drawn and what is collectable agree.
+        if let saved = SettingsStore.shared.gateProgress(for: index),
+           saved.seed == SettingsStore.shared.runSeed {
+            // Indices are filtered against this gate: a snapshot is only ever trusted
+            // when it came from the same run, but a defensively filtered load costs
+            // nothing and a crash costs everything.
+            coinsGot = Set(saved.coins.filter { level.coins.indices.contains($0) })
+            lanternsGot = Set(saved.lanterns.filter { level.lanterns.indices.contains($0) })
+            cp = saved.checkpoint
+            pendingResume = CGPoint(x: saved.x, y: saved.y)
+            if saved.checkpoint >= 0, level.checkpoints.indices.contains(saved.checkpoint) {
+                let c = level.checkpoints[saved.checkpoint]
+                checkpointSnap = (CGPoint(x: c.x, y: c.y), Array(coinsGot), saved.checkpoint)
+            }
+            if ProcessInfo.processInfo.arguments.contains("-TestProgress") {
+                print("[Mossgate:PROGRESS] restored from store: coins=\(coinsGot.sorted()) "
+                      + "lanterns=\(lanternsGot.sorted()) cp=\(cp) at (\(Int(saved.x)),\(Int(saved.y))) "
+                      + "savedSeed=\(saved.seed) runSeed=\(SettingsStore.shared.runSeed)")
+            }
+        } else if let stale = SettingsStore.shared.gateProgress(for: index),
+                  ProcessInfo.processInfo.arguments.contains("-TestProgress") {
+            print("[Mossgate:PROGRESS] snapshot ignored: savedSeed=\(stale.seed) "
+                  + "runSeed=\(SettingsStore.shared.runSeed) — different run, geometry differs")
+        }
 
         // Sky must be added FIRST so it sits behind everything else (zPosition
         // on the tiles is -100, but order of addChild also matters).
@@ -1255,7 +1351,10 @@ final class MossgateScene: SKScene {
         addWorldChild(playerNode)
         // Test rig: -PlaceAt overrides the spawn (applied here, not once at
         // startup, so a re-entrant startLevel from the hosting view can't undo it).
-        let start = placeAtOverride ?? level.spawn
+        // Resume where the gate was left, if it was. The test override still wins, and
+        // the level's own spawn is the fallback.
+        let start = placeAtOverride ?? pendingResume ?? level.spawn
+        pendingResume = nil
         placePlayer(at: start)
 
         camX = clamp(start.x - 180, 0, max(0, level.width - 720))

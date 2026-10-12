@@ -233,7 +233,17 @@ struct RootView: View {
     /// the pause panel's — and leaving while out of light would otherwise strand the
     /// player on the gates with no light left to spend.
     private func leaveToMenu() {
-        if SettingsStore.shared.isOutOfLight { SettingsStore.shared.refillLives() }
+        // Keep the gate's progress before the scene is torn down — the fix for
+        // "When leaving game to menu and there is a progression then this is not
+        // saved. So player have to restart the level complete." A gate that ended by
+        // running out of light is the exception: that one starts over, which is what
+        // losing your last life means.
+        if SettingsStore.shared.isOutOfLight {
+            session.scene?.discardProgression()
+            SettingsStore.shared.refillLives()
+        } else {
+            session.scene?.saveProgression()
+        }
         withAnimation(.easeInOut(duration: 0.25)) { phase = .title }
     }
 
