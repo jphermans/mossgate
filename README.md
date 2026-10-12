@@ -183,6 +183,7 @@ cannot be scripted.
 | `-TestSettings 1` | report the stored preferences; `-TestSettings set` changes them and resets progress first |
 | `-CollapseWorlds 1` | collapse every world card on the title screen, for screenshots |
 | `-UnlockFullGame 1` | pretend the Full Game is owned, for screenshots |
+| `-DemoPlay 1` | filming harness: drives the player (right + hops) and recovers from death. Gives up after 40s, and any real press on a control cancels it |
 | `-OpenResetConfirm 1` | open straight into the reset card |
 | `-CompleteWorld <n>` | mark world `n` cleared, in memory only |
 | `-WinNow 1` | clear the current gate for real (persists) |
