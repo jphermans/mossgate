@@ -62,15 +62,15 @@ struct SetupView: View {
                             blurb: "Jumps, coins, deaths, gates",
                             isOn: $settings.sfxOn
                         )
-                        toggleRow(
-                            title: "Haptics",
-                            blurb: "A pulse on jumps, coins, waystones and losing the wick.",
-                            isOn: $settings.hapticsOn
-                        )
                         volumeRow(
                             title: "SFX volume",
                             value: $settings.sfxVolume,
                             enabled: settings.sfxOn
+                        )
+                        toggleRow(
+                            title: "Haptics",
+                            blurb: "A pulse on jumps, coins, waystones and losing the wick.",
+                            isOn: $settings.hapticsOn
                         )
                         Divider()
                             .background(Color("MossgateBorder"))
