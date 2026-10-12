@@ -83,6 +83,9 @@ final class MossgateScene: SKScene {
     private var touchRight = false
     private var touchJump = false
     private var touchDown = false
+    /// UP held. A camera peek only: unlike DOWN there is no physics attached to it, so it
+    /// needs no rising-edge handling and no controller binding (the pad has no spare input).
+    private var touchUp = false
     /// One-shot "step off the ledge". Shared by the pad and a controller — a
     /// drop request is a drop request, wherever it came from.
     private var dropRequested = false
@@ -102,6 +105,7 @@ final class MossgateScene: SKScene {
     private var inRight: Bool { touchRight || (controllerEnabled && padRight) }
     private var inJump: Bool { touchJump || (controllerEnabled && padJump) }
     private var inDown: Bool { touchDown || (controllerEnabled && padDown) }
+    private var inUp: Bool { touchUp }
 
     // Camera
     private var camX: CGFloat = 0
@@ -299,12 +303,51 @@ final class MossgateScene: SKScene {
         runEdgeTestIfRequested()
         runProgressTestIfRequested()
         runCoinSpriteTestIfRequested()
+        runUpTestHookIfRequested()
         // -OpenPause 1 drops straight into the pause panel, so it can be photographed without a
         // tap. Deferred, like every other hook here: called synchronously from startLevel it
         // runs inside makeUIView, before the HUD binding is live, and the panel never appears.
         if ProcessInfo.processInfo.arguments.contains("-OpenPause") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
                 self?.pause()
+            }
+        }
+    }
+
+    /// Test hook: `-TestUp 1` holds UP and reports what the camera does, the way `-TestDown 1`
+    /// measures the DOWN pan. Two things are worth measuring rather than assuming: that UP
+    /// moves the camera at all, and that UP and DOWN held together cancel instead of fighting.
+    private func runUpTestHookIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestUp") else { return }
+        // Measures peekY, not camY: the peek is an OFFSET applied on top of the followed
+        // camera, deliberately, so the pan is the same size regardless of where the player
+        // sits in the dead zone. Reading camY measured the follow and reported pan=0 for a
+        // working peek.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self else { return }
+            let rest = self.peekY
+            self.setTouch(up: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self else { return }
+                let upY = self.peekY
+                self.setTouch(up: false)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                    guard let self else { return }
+                    let back = self.peekY
+                    // World y grows downward, so looking up must make the offset NEGATIVE.
+                    let verdict = (upY < rest - 40) ? "OK camera panned up" : "FAIL no upward pan"
+                    print("[Mossgate:UP] rest=\(Int(rest)) up=\(Int(upY)) released=\(Int(back)) "
+                          + "pan=\(Int(upY - rest)) \(verdict)")
+                    self.setTouch(down: true, up: true)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                        guard let self else { return }
+                        let both = self.peekY
+                        self.setTouch(down: false, up: false)
+                        let note = abs(both - rest) < 12 ? "OK they cancel"
+                                                         : "NOTE they do not cancel"
+                        print("[Mossgate:UP] bothHeld=\(Int(both)) \(note)")
+                    }
+                }
             }
         }
     }
@@ -1302,7 +1345,7 @@ final class MossgateScene: SKScene {
         }
     }
 
-    func setTouch(left: Bool? = nil, right: Bool? = nil, jump: Bool? = nil, down: Bool? = nil, drop: Bool? = nil) {
+    func setTouch(left: Bool? = nil, right: Bool? = nil, jump: Bool? = nil, down: Bool? = nil, up: Bool? = nil, drop: Bool? = nil) {
         if let v = left { touchLeft = v }
         if let v = right { touchRight = v }
         if let v = jump { touchJump = v }
@@ -1316,6 +1359,9 @@ final class MossgateScene: SKScene {
             touchDown = v
         }
         if let v = drop { if v { dropRequested = true } }
+        // UP has no physics of its own — it only pans the camera — so unlike DOWN there is
+        // nothing to fire on a rising edge.
+        if let v = up { touchUp = v }
     }
 
     /// External controller input. Mirrors `setTouch` so both sources feed the
@@ -1622,7 +1668,22 @@ final class MossgateScene: SKScene {
         // the same size instead of depending on where the player happens to sit
         // inside the dead zone. Gives the pad a visible job on solid ground, and
         // a way to see what waits below before dropping through a ledge.
-        let peekTarget: CGFloat = (inDown && grounded) ? Phys.lookDown : 0
+        // DOWN while standing pans the view down; UP pans it up.
+        //
+        // UP is allowed in the air as well as on the ground, because looking up while rising
+        // is exactly when you want to see where you are going — and DOWN cannot have the
+        // airborne case, since it already spends it diving. Held together they cancel, which
+        // is the honest result of asking to look both ways at once.
+        let peekTarget: CGFloat
+        if inUp && inDown {
+            peekTarget = 0
+        } else if inUp {
+            peekTarget = Phys.lookUp
+        } else if inDown && grounded {
+            peekTarget = Phys.lookDown
+        } else {
+            peekTarget = 0
+        }
         peekY += (peekTarget - peekY) * (1 - exp(-9 * dt))
 
         let jumpDown = inJump

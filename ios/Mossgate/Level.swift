@@ -30,6 +30,12 @@ enum Phys {
     /// Big enough to push past the camera's dead zone so the pan is visible.
     static let lookDown: CGFloat = 140
 
+    /// UP held: how far the camera biases the other way, in world units.
+    ///
+    /// Negative because world y grows downward — the offset is added to the camera's y, so
+    /// looking up is a smaller y. Same size as `lookDown` so the two pans are symmetrical.
+    static let lookUp: CGFloat = -140
+
     // ── Foothold ──────────────────────────────────────────────────
     /// How much of the player's width must be over a platform before it holds
     /// them up.

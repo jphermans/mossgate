@@ -196,6 +196,7 @@ struct RootView: View {
         .onChange(of: touch.right) { _, _ in touch.push(to: session.scene) }
         .onChange(of: touch.jump)  { _, _ in touch.push(to: session.scene) }
         .onChange(of: touch.down)  { _, _ in touch.push(to: session.scene) }
+        .onChange(of: touch.up)    { _, _ in touch.push(to: session.scene) }
     }
 
     // MARK: - Helpers

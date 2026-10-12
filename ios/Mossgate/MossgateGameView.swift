@@ -80,8 +80,13 @@ final class TouchState: ObservableObject {
     @Published var right = false
     @Published var jump = false
     @Published var down = false
+    /// Look up — the counterpart to `down`. DOWN pans the camera to show what waits below;
+    /// without this there is no way to see what is above you. Asked for as "there is a button
+    /// to look down, but not to look up, how can I go back up when I can not see what's
+    /// there?"
+    @Published var up = false
 
     func push(to scene: MossgateScene?) {
-        scene?.setTouch(left: left, right: right, jump: jump, down: down)
+        scene?.setTouch(left: left, right: right, jump: jump, down: down, up: up)
     }
 }

@@ -135,6 +135,10 @@ struct GameControlsView: View {
                 }
                 Spacer()
                 HStack(spacing: 10) {
+                    // Paired with the DOWN pad, because they do the same job in opposite
+                    // directions. DOWN pans the camera to show what waits below; without an
+                    // UP there was no way to see what is above you before going back up.
+                    ctrlButton(label: "▲", key: "up") { touch.up = $0 }
                     ctrlButton(label: "▼", key: "down") { touch.down = $0 }
                     ctrlButton(label: "JUMP", key: "jump",
                                isPrimary: true) { touch.jump = $0 }
