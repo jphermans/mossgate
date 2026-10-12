@@ -637,7 +637,7 @@ final class MossgateScene: SKScene {
                         print("[Mossgate:GEN]   over limit: world \(g.world) key \(g.id) "
                               + "\"\(g.name)\" gap=\(Int(r.widestGap)) step=\(Int(r.tallestStep)) "
                               + "brambles=\(r.brambles) tight=\(r.bramblesTooTight) "
-                              + "worstClearance=\(Int(r.worstClearance))/\(Int(LevelGen.spikeClearance)) "
+                              + "worstClearance=\(Int(min(r.worstClearance, LevelGen.spikeClearance)))/\(Int(LevelGen.spikeClearance)) "
                               + "groundBlocks=\(g.solids.filter { !$0.oneway }.count)")
                     }
                 }

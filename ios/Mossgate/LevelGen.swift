@@ -95,7 +95,7 @@ enum LevelGen {
         // 0.30 hazards + 0.30 gap leaves 0.40 for the two step branches.
         let scale = raw > 0.30 ? 0.30 / raw : 1
         return Profile(
-            width: 2400 + w * 300,
+            width: 3200 + w * 420,
             height: 760 + (world % 2 == 1 ? 160 : 0),
             groundY: 512,
             gapMax: min(maxGap, 96 + w * 11),
@@ -152,6 +152,12 @@ enum LevelGen {
         /// Past this depth the gate stops dropping. Without it a run of step-downs
         /// walks the floor under the kill plane and the player dies standing on it.
         let maxSink = p.groundY + 240
+        // ...and a ceiling, which there never was. `maxSink` stopped the ground sinking out of
+        // the level, but nothing stopped it climbing: every step up raised it and the branch
+        // below only limited the size of one step, not the total. Over a long gate the ground
+        // could walk out of the level's own roof, taking the flag with it.
+        let maxRise: CGFloat = 280
+        let minTop = p.groundY - maxRise
 
         // Opening run: a safe landing and a look at what is coming.
         solids.append(slab(0, 340, gy))
@@ -212,7 +218,9 @@ enum LevelGen {
                 // Step up, with a short cut in front of the face so the run has to
                 // be turned into a jump rather than just stopped by a wall.
                 x += rng.range(26, 54)
-                gy -= min(maxStepUp, rng.range(58, p.stepMax))
+                // Capped against the ceiling as well as by the size of one step: a rise of 0
+                // when the ground is already at the top just makes this a flat stretch.
+                gy -= min(min(maxStepUp, rng.range(58, p.stepMax)), max(0, gy - minTop))
                 let w = rng.range(300, 500)
                 solids.append(slab(x, w, gy))
                 x += w
@@ -224,7 +232,9 @@ enum LevelGen {
                 // the gate longer; the limit is there to bound the floor.
                 let room = maxSink - gy
                 if room < 70 {
-                    gy -= min(maxStepUp, rng.range(58, p.stepMax))
+                    // Capped against the ceiling as well as by the size of one step: a rise of
+                    // 0 when the ground is already at the top makes this a flat stretch.
+                    gy -= min(min(maxStepUp, rng.range(58, p.stepMax)), max(0, gy - minTop))
                 } else {
                     gy += min(room, rng.range(90, min(maxDrop, 210)))
                 }
@@ -240,11 +250,26 @@ enum LevelGen {
             }
         }
 
-        // Closing run and the gate.
+        // Closing run and the gate, always back down on the grass.
+        //
+        // The tail used to sit at whatever height the last feature left the ground, which after
+        // a run of climbs could be well up in the level — so a gate could finish on a platform
+        // with the flag planted up there. Requested as "the gates are on the grass and no above
+        // or under the platforms".
+        //
+        // It ramps back rather than stepping: the floor can have sunk 240 below the base, and
+        // one step of 240 is taller than any jump — that would strand the player below their own
+        // goal. Each ramp step is a legal rise.
         let tailStart = x
-        let tail = max(360, p.width - tailStart)
-        solids.append(slab(tailStart, tail, gy))
-        x = tailStart + tail
+        while gy > p.groundY + 0.5 {
+            gy = max(p.groundY, gy - maxStepUp)
+            solids.append(slab(x, 120, gy))
+            x += 120
+        }
+        let tail = max(360, p.width - x)
+        gy = p.groundY
+        solids.append(slab(x, tail, gy))
+        x += tail
         let flag = CGPoint(x: x - 130, y: gy - 10)
         // A final clear stretch so the gate is never a surprise landing.
         coins.append(Coin(x: tailStart + 150, y: gy - 92))
