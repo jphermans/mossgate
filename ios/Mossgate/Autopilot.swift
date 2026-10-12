@@ -627,56 +627,6 @@ enum Autopilot {
         return CGPoint(x: b.x, y: b.top)
     }
 
-    /// A home for a coin, proven collectible before it is accepted.
-    ///
-    /// Candidates are tried in order of preference — the probed arc first, so coins
-    /// still move around and vary with the seed — but each is checked against the
-    /// game's own pickup rule and only a passing one is used. The last resort is
-    /// directly above the nearest surface, which a standing jump cannot miss.
-    ///
-    /// This is the difference between believing a coin is reachable because the
-    /// placement maths looks right, and knowing it: 55 of 214 coins were unreachable
-    /// precisely because the maths was trusted.
-    static func placeCoin(anchor: CGPoint, index: Int, level: Level,
-                          phase: [CGFloat], period: [CGFloat], seed: Int) -> CGPoint {
-        var candidates: [CGPoint] = []
-        if let arc = variedCoin(near: anchor, level: level, phase: phase,
-                                period: period, seed: seed) {
-            candidates.append(arc)
-        }
-        candidates.append(nudged(anchor, index: index, level: level, seed: seed))
-        // Ground directly below the anchor if there is any, otherwise the nearest
-        // surface at all — a coin over a pit would otherwise have nowhere to go.
-        if let ground = surfaceBelow(anchor, level: level) ?? nearestSurface(to: anchor, level: level) {
-            candidates.append(CGPoint(x: ground.x, y: ground.y - 70))
-            candidates.append(CGPoint(x: ground.x, y: ground.y - 48))
-            candidates.append(CGPoint(x: ground.x, y: ground.y - 60))
-        }
-        for c in candidates where collectible(c, level: level, phase: phase, period: period) {
-            return c
-        }
-        // Nothing passed. Say so rather than shipping a coin nobody can reach.
-        print("[Mossgate:COIN] no collectible position for coin \(index) in \(level.name)")
-        return candidates.first ?? anchor
-    }
-
-    /// The point on a route closest to an anchor, within `limit`.
-    ///
-    /// This replaced sampling the route by arc length, which dropped a coin wherever
-    /// the fraction happened to land — measured at up to 2742 units from where the
-    /// level designed it, and the reason the runner-sourced gates still had coins
-    /// nobody could take. Anchoring on the nearest point of a real playthrough keeps
-    /// the coin both ON the path and NEAR its designed position.
-    private static func nearestRoutePoint(_ route: [CGPoint], to anchor: CGPoint,
-                                          limit: CGFloat) -> CGPoint? {
-        var best: (d: CGFloat, p: CGPoint)?
-        for p in route {
-            let d = hypot(p.x - anchor.x, p.y - anchor.y)
-            if d < limit && (best == nil || d < best!.d) { best = (d, p) }
-        }
-        return best?.p
-    }
-
     /// Coins placed to be jumped for, in fresh random spots.
     ///
     /// Requested: "When the coin position is higher then the character height then the
