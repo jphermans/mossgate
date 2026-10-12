@@ -78,7 +78,7 @@
 		43587A64593C98890DC7F0DA /* jump-2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "jump-2.png"; sourceTree = "<group>"; };
 		4AC95713620072197D67623D /* idle-2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "idle-2.png"; sourceTree = "<group>"; };
 		4B685C76C1A57494AAA5BAB2 /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
-		653273BEAEE9FA37F2A54538 /* dusk.m4a */ = {isa = PBXFileReference; path = dusk.m4a; sourceTree = "<group>"; };
+		653273BEAEE9FA37F2A54538 /* dusk.m4a */ = {isa = PBXFileReference; lastKnownFileType = file; path = dusk.m4a; sourceTree = "<group>"; };
 		6E5C2C89684E0C1C3C309873 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		6EDE7A31A695C6FB397CFA36 /* coin-4.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "coin-4.png"; sourceTree = "<group>"; };
 		70BD29C7FBBFCB3E8F0E4C6C /* GamepadManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamepadManager.swift; sourceTree = "<group>"; };
@@ -87,7 +87,7 @@
 		8564AE6836A6BFFCE26ED845 /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
 		89D27F4086E0CD4991CB2888 /* MossgateGameView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MossgateGameView.swift; sourceTree = "<group>"; };
 		8DF7604E729B9785CE59C827 /* flag-3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "flag-3.png"; sourceTree = "<group>"; };
-		92B27566BC57FFB7374C942E /* ember.m4a */ = {isa = PBXFileReference; path = ember.m4a; sourceTree = "<group>"; };
+		92B27566BC57FFB7374C942E /* ember.m4a */ = {isa = PBXFileReference; lastKnownFileType = file; path = ember.m4a; sourceTree = "<group>"; };
 		9E19EA7CA3743C6533EC00DF /* run-1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "run-1.png"; sourceTree = "<group>"; };
 		9F7BCBEF4E3D0F6F044C175D /* Level.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Level.swift; sourceTree = "<group>"; };
 		A140C1485CEAAF7B0D8EABFD /* flag-1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "flag-1.png"; sourceTree = "<group>"; };
@@ -100,7 +100,7 @@
 		AC0897B7928508E3E9AEAAA4 /* idle-4.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "idle-4.png"; sourceTree = "<group>"; };
 		AD463A8F27CCB04FFBC5B3D5 /* coin-1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "coin-1.png"; sourceTree = "<group>"; };
 		B01E7B3B0AF579802D9A34EF /* Levels+Run.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Levels+Run.swift"; sourceTree = "<group>"; };
-		B0B612E510B4C35C7163A64C /* Mossgate.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Mossgate.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B0B612E510B4C35C7163A64C /* Mossgate.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mossgate.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C0D15C2A2623B127CA8C661A /* idle-1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "idle-1.png"; sourceTree = "<group>"; };
 		C9AED1889F92171EC5C7C17D /* AudioEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngine.swift; sourceTree = "<group>"; };
 		CB355312E16A862A65217AA4 /* spike.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = spike.png; sourceTree = "<group>"; };
@@ -109,7 +109,7 @@
 		CEF0BD811ACEF143573A6320 /* MossgateScene.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MossgateScene.swift; sourceTree = "<group>"; };
 		D1D1466E59AA415CC3C4ACCF /* run-2.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "run-2.png"; sourceTree = "<group>"; };
 		E0A84C936FBC190E4D31118F /* idle-3.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "idle-3.png"; sourceTree = "<group>"; };
-		EA1E887D155C57C5171E683F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		EA1E887D155C57C5171E683F /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		F2D1680C647C7829E0700209 /* OverlayViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OverlayViews.swift; sourceTree = "<group>"; };
 		F6C6311640D5954178254A31 /* GameConfirm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameConfirm.swift; sourceTree = "<group>"; };
 		FE15C6D83CACF57CBC84E245 /* TitleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TitleView.swift; sourceTree = "<group>"; };
@@ -245,7 +245,6 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					37FC02FF11A5F4E0C6190A0C = {
-						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -376,7 +375,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 53;
+				CURRENT_PROJECT_VERSION = 54;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -411,7 +410,7 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.7.30;
+				MARKETING_VERSION = 0.7.31;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -430,6 +429,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = MossgateDusk;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 8E97UZ2JBF;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -447,6 +447,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = MossgateDusk;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = 8E97UZ2JBF;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -493,7 +494,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 53;
+				CURRENT_PROJECT_VERSION = 54;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -522,7 +523,7 @@
 				"INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad" = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.7.30;
+				MARKETING_VERSION = 0.7.31;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = Mossgate;

@@ -62,13 +62,19 @@ struct TitleView: View {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
                     header
+                    // Above everything, including the purchase card.
+                    //
+                    // It first sat below the purchase card, which on a 16 Pro put it half over
+                    // the fold — so a free player, who is exactly who a daily is for, had to
+                    // scroll to discover the feature existed. Reported as "where are the mini
+                    // games?".
+                    dailyCard
                     // Above the world list, not below it: in landscape the six world
                     // cards fill the screen, so a purchase card underneath them is
                     // something you have to go looking for.
                     if !settings.hasFullGame {
                         fullGameCard
                     }
-                    dailyCard
                     ForEach(Worlds.all, id: \.id) { world in
                         worldCard(world)
                     }
