@@ -53,6 +53,9 @@ final class MossgateScene: SKScene {
     /// lantern the checkpoint restored, collect the same life again, forever. That was the
     /// reported loop, `2/3 -> die -> 3/3 -> 2/3`, and it made the game impossible to lose.
     private var lanternsAwarded: Set<Int> = []
+
+    /// Accumulator for Coin Rush's clock, in seconds.
+    private var rushAccum: Double = 0
     /// Pickup positions for this load, after the per-run jitter. BOTH the sprite
     /// and the pickup test read these, so the two can never disagree — the
     /// collection tests used to read `level.coins[i]` directly.
@@ -224,6 +227,9 @@ final class MossgateScene: SKScene {
         /// Remaining light (lives) and the cap.
         let lives: Int
         let maxLives: Int
+        /// Seconds left in Coin Rush. 0 means not a timed run, so every other mode
+        /// leaves this alone and the HUD simply does not draw a clock.
+        var secondsLeft: Int = 0
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────
@@ -1693,6 +1699,23 @@ final class MossgateScene: SKScene {
     // ── Physics step (port of engine.ts `step`) ──────────────────
 
     private func step(_ dt: CGFloat) {
+        // Coin Rush's clock. Counted here rather than from wall time so it stops when the game
+        // stops — pausing should not spend the player's seconds.
+        if SettingsStore.shared.coinRushRun {
+            rushAccum += Double(dt)
+            if rushAccum >= 1.0 {
+                rushAccum -= 1.0
+                SettingsStore.shared.tickCoinRush()
+                notifyPhase()
+                if SettingsStore.shared.coinRushLeft <= 0 {
+                    SettingsStore.shared.endCoinRushRun(coins: coinsGot.count)
+                    SettingsStore.shared.notice = "Time — \(coinsGot.count) coins. Best: \(SettingsStore.shared.coinRushBest)."
+                    setState(.gameOver)
+                    notifyPhase()
+                    return
+                }
+            }
+        }
         time += dt
         // placeMovers belongs here (engine.ts step() line 1). Mover positions —
         // and therefore `moverPrev` — must advance once per substep, otherwise
@@ -2266,7 +2289,8 @@ final class MossgateScene: SKScene {
             lanterns: lanternsGot.count,
             lanternsTotal: level.lanterns.count,
             lives: SettingsStore.shared.lives,
-            maxLives: SettingsStore.maxLives
+            maxLives: SettingsStore.maxLives,
+            secondsLeft: SettingsStore.shared.coinRushRun ? SettingsStore.shared.coinRushLeft : 0
         )
         onPhaseChange?(state, info)
         onCoinsChange?(coinsGot.count)

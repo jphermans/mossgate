@@ -9,6 +9,9 @@ struct TitleView: View {
     /// free for everyone, but the gate it lives on is still behind the progression chain, so
     /// going through the ordinary path refuses it and the tap does nothing.
     let onStartDaily: (Int) -> Void
+    /// Start a Coin Rush. Timed, so like the other two it skips the unlock check — the
+    /// world is rebuilt from a fresh seed and there is no gate of this run to unlock.
+    let onStartCoinRush: (Int) -> Void
     /// Start an Endless Run. Like the daily it deliberately skips the unlock check: it
     /// rebuilds the world from a fresh seed, so there is no gate of this run to unlock.
     let onStartEndless: (Int) -> Void
@@ -82,6 +85,7 @@ struct TitleView: View {
                     // games?".
                     dailyCard
                     endlessCard
+                    coinRushCard
                     // Above the world list, not below it: in landscape the six world
                     // cards fill the screen, so a purchase card underneath them is
                     // something you have to go looking for.
@@ -302,6 +306,50 @@ struct TitleView: View {
                 }
             }
         }
+    }
+
+    /// Coin Rush.
+    ///
+    /// The third mini-game. The clock is the whole idea, so the card leads with the time rather
+    /// than the world.
+    private var coinRushCard: some View {
+        let best = settings.coinRushBest
+        return Button {
+            settings.startCoinRushRun()
+            onStartCoinRush(0)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    Text("COIN RUSH")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(3)
+                        .foregroundStyle(Color("MossgateLantern"))
+                    Spacer(minLength: 0)
+                    if best > 0 {
+                        Text("best \(best)")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(Color("MossgateMuted"))
+                    }
+                }
+                Text("\(SettingsStore.coinRushSeconds) seconds. Take everything you can reach.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color("MossgateCream"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(best > 0 ? "Your best is \(best) coins. Every run is a new gate."
+                              : "One gate, one clock, no second chances.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color("MossgateMuted"))
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color("MossgateSurface").opacity(0.85))
+                    .overlay(RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color("MossgateBorder"), lineWidth: 1))
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     /// Endless Run.

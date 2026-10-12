@@ -69,6 +69,20 @@ struct GameHUDView: View {
                     .font(.system(size: 13, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Color("MossgateCream"))
             }
+            // Coin Rush's clock, drawn only when there is one. Every other mode leaves
+            // `secondsLeft` at zero and the HUD is exactly as it was, rather than carrying a
+            // permanent 0:00 that means nothing outside one mode.
+            if hud.secondsLeft > 0 {
+                HStack(spacing: 5) {
+                    Image(systemName: "timer")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Color("MossgateLantern"))
+                    Text("\(hud.secondsLeft)s")
+                        .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(Color("MossgateCream"))
+                        .monospacedDigit()
+                }
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)

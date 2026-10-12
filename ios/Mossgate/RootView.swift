@@ -120,6 +120,10 @@ struct RootView: View {
                         gameLevelIndex = idx
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
                     },
+                    onStartCoinRush: { idx in
+                        gameLevelIndex = idx
+                        withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
+                    },
                     onStartEndless: { idx in
                         // Not guarded, for the same reason the daily is not: the world was just
                         // rebuilt from a fresh seed, so there is no gate of this run to unlock.
@@ -267,6 +271,18 @@ struct RootView: View {
                     // so without this the splash's gate would be unverifiable — and routing it
                     // through `beginFromSplash` means it cannot drift from the real path.
                     if args.contains("-TapBegin"), phase == .splash { beginFromSplash() }
+                    // Test hook: -CoinRush 1 starts a timed run immediately. The card cannot be
+                    // pressed on a simulator, so without this the clock, its countdown and the
+                    // moment it ends would all be unverifiable.
+                    // Deferred like -StartInLevel: -SkipSplash's own transition runs a beat later,
+                    // and setting the phase here immediately would simply be overwritten by it.
+                    if args.contains("-CoinRush") {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                            SettingsStore.shared.startCoinRushRun()
+                            gameLevelIndex = 0
+                            withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
+                        }
+                    }
                     // Test hook: -OpenSetup 1 lands on the title screen with the
                     // Setup sheet already presented (used to verify the sheet
                     // wiring without a simulator tap).

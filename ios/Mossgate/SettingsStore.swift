@@ -61,6 +61,40 @@ final class SettingsStore: ObservableObject {
     /// for every player. It costs the player nothing: the seed is deliberately not persisted, so
     /// a launch is a new world anyway, and progress is keyed on `gateKey` rather than on the
     /// seed, so no progress depends on which seed is in force.
+    // MARK: - Coin Rush
+
+    /// A timed grab: as many coins as you can reach before the clock runs out.
+    ///
+    /// A property of the run like Endless, and the only mode with a deadline. The gate is an
+    /// ordinary generated one — coins are already scattered where they are hard to reach, which
+    /// is what makes a time limit interesting rather than busywork.
+    @Published private(set) var coinRushRun = false
+    @Published private(set) var coinRushLeft = 0
+
+    static let coinRushSeconds = 45
+
+    var coinRushBest: Int { UserDefaults.standard.integer(forKey: "coinRushBest") }
+
+    func startCoinRushRun() {
+        coinRushRun = true
+        coinRushLeft = SettingsStore.coinRushSeconds
+        runSeed = Int.random(in: 1...999_999)
+        gates = Levels.build(seed: runSeed)
+    }
+
+    /// One second gone.
+    func tickCoinRush() {
+        guard coinRushRun, coinRushLeft > 0 else { return }
+        coinRushLeft -= 1
+    }
+
+    /// The clock beat you, or you left. The coin count is whatever the HUD had at that moment.
+    func endCoinRushRun(coins: Int) {
+        if coins > coinRushBest { UserDefaults.standard.set(coins, forKey: "coinRushBest") }
+        coinRushRun = false
+        coinRushLeft = 0
+    }
+
     // MARK: - Endless Run
 
     /// Whether the current run is an Endless one.
