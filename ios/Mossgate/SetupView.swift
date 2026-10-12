@@ -5,8 +5,16 @@ struct SetupView: View {
     let onDone: () -> Void
     @ObservedObject private var settings = SettingsStore.shared
     @ObservedObject private var controllers = ControllerList.shared
+
+    /// What a share says. Short, and it names the seed, because that is the only part the
+    /// recipient needs.
+    private var shareSeedText: String {
+        "Mossgate — my run seed is \(settings.runSeed). Enter it in Setup to play the same gates. \(AppInfo.supportURL)"
+    }
     /// `-OpenResetConfirm 1` opens straight into the reset card, so it can be
     /// photographed without a tap.
+    /// A seed pasted in from someone else. Empty means the row is idle.
+    @State private var seedEntry = ""
     @State private var showResetConfirm =
         ProcessInfo.processInfo.arguments.contains("-OpenResetConfirm")
 
@@ -147,6 +155,44 @@ struct SetupView: View {
                     settings.newRun()
                     AudioEngine.shared.tap()
                 } label: {
+                    // Sharing the seed is the point of showing it: every run is procedurally
+                    // varied, so the seed is the only way to hand someone the same gates.
+                    ShareLink(item: shareSeedText) {
+                        Text("Share seed")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(RoundedRectangle(cornerRadius: 12)
+                                .fill(Color("MossgateSurface").opacity(0.85))
+                                .overlay(RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(Color("MossgateBorder"), lineWidth: 1)))
+                            .foregroundStyle(Color("MossgateCream"))
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    // Taking one is the other half. Without this a shared seed is a number the
+                    // recipient has no way to use.
+                    HStack(spacing: 10) {
+                        TextField("Their seed", text: $seedEntry)
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 14, design: .monospaced))
+                            .foregroundStyle(Color("MossgateCream"))
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 44)
+                            .background(RoundedRectangle(cornerRadius: 12)
+                                .fill(Color("MossgateSurface").opacity(0.85))
+                                .overlay(RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(Color("MossgateBorder"), lineWidth: 1)))
+                        Button("Play") {
+                            if let n = Int(seedEntry.trimmingCharacters(in: .whitespaces)) {
+                                settings.useSeed(n)
+                                onDone()
+                            }
+                        }
+                        .frame(minWidth: 74, minHeight: 44)
+                        .background(RoundedRectangle(cornerRadius: 12)
+                            .fill(Color("MossgateLantern")))
+                        .foregroundStyle(Color("MossgatePrimaryFg"))
+                        .font(.system(size: 14, weight: .semibold))
+                    }
                     Text("Shuffle")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Color("MossgatePrimaryFg"))

@@ -248,3 +248,21 @@ final class SettingsStore: ObservableObject {
         refillLives()
     }
 }
+
+extension SettingsStore {
+    /// Adopt a seed someone shared.
+    ///
+    /// `runSeed` is `private(set)`, and this lives in the same file, which is the only place
+    /// allowed to write it. It mirrors the reshuffle path: rebuild the gates from the new seed
+    /// and let everything keyed on the seed follow. The per-run snapshot is keyed on the seed
+    /// already, so a new seed is a new key rather than stale progress.
+    ///
+    /// Clamped to the range the randomiser draws from, so a mistyped or hostile number cannot
+    /// produce a seed no real run would ever have.
+    func useSeed(_ seed: Int) {
+        let clamped = min(max(seed, 1), 999_999)
+        guard clamped != runSeed else { return }
+        runSeed = clamped
+        gates = Levels.build(seed: clamped)
+    }
+}
