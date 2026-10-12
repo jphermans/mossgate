@@ -153,6 +153,9 @@ struct GameControlsView: View {
                             isPrimary: Bool = false,
                             onChange: @escaping (Bool) -> Void) -> some View {
         ControlButton(label: label, isPrimary: isPrimary, onPress: {
+            // A real press always wins over the filming demo: it cancels it and hands control
+            // back, so a stray -DemoPlay launch can be taken over at any moment.
+            DemoMode.stop()
             onChange(true)
         }, onRelease: { onChange(false) })
     }
@@ -183,6 +186,19 @@ private struct ControlButton: View {
                 )
         }
         .buttonStyle(PressableButtonStyle(pressed: $pressed, onPress: onPress, onRelease: onRelease))
+        // Never let a press outlive the button.
+        //
+        // PressableButtonStyle releases from `.onChange(isPressed)`, which does not run if the
+        // button is torn out of the hierarchy while it is still pressed — and that happens at
+        // exactly the moments that matter: the HUD rebuilding, a phase change, a rotation, a
+        // level restart. The input would then stay on for good and survive the restart, which
+        // is a character that runs by itself into the dark while nothing is being touched.
+        .onDisappear {
+            if pressed {
+                pressed = false
+                onRelease()
+            }
+        }
     }
 }
 

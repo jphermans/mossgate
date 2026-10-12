@@ -333,6 +333,32 @@ struct TitleView: View {
     }
 }
 
+// MARK: - Filming harness
+
+/// The `-DemoPlay` filming harness's on/off switch.
+///
+/// It exists so a test flag can never hold the game hostage. Before this, `-DemoPlay` held the
+/// right pad down and retried every death with no way out: the game played itself forever, and
+/// from the outside that is indistinguishable from a bug — a character that runs by itself
+/// into the deep, restarts, and burns every life in seconds. Now the demo gives up on a
+/// deadline, and any real press on a control cancels it instantly.
+enum DemoMode {
+    static var active = false
+    /// The touch state the demo is driving, so cancelling can let go of it.
+    static weak var driver: TouchState?
+    /// Well past anything a promo clip needs, and short enough that a stray launch cannot
+    /// leave the game playing itself for long.
+    static let deadline: TimeInterval = 40
+
+    /// Let go and stop. Safe to call when the demo was never on.
+    static func stop() {
+        guard active else { return }
+        active = false
+        driver?.right = false
+        driver?.jump = false
+    }
+}
+
 /// Reads CFBundleShortVersionString / CFBundleVersion from the main bundle.
 enum AppInfo {
     /// Public pages, and the only place these URLs are written down.

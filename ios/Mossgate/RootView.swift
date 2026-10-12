@@ -206,7 +206,7 @@ struct RootView: View {
         //
         // Pause and win are deliberately not handled: neither is a dead end for a robot.
         .onChange(of: hud.phase) { _, newPhase in
-            guard ProcessInfo.processInfo.arguments.contains("-DemoPlay"),
+            guard DemoMode.active,
                   newPhase == .dead || newPhase == .gameOver else { return }
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
                 SettingsStore.shared.refillLives()
@@ -222,13 +222,19 @@ struct RootView: View {
         // TouchState the on-screen buttons use means nothing can overwrite it.
         .onAppear {
             guard ProcessInfo.processInfo.arguments.contains("-DemoPlay") else { return }
+            DemoMode.active = true
+            DemoMode.driver = touch
             touch.right = true
             // Tighter than a human would play, because the demo cannot see brambles coming.
             _ = Timer.scheduledTimer(withTimeInterval: 0.34, repeats: true) { _ in
+                guard DemoMode.active else { return }
                 // A tap, not a hold — the game reads the jump on the rising edge.
                 touch.jump = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.09) { touch.jump = false }
             }
+            // Let go on a deadline. A test flag must never be able to leave the game playing
+            // itself indefinitely — that is what this harness did before DemoMode existed.
+            DispatchQueue.main.asyncAfter(deadline: .now() + DemoMode.deadline) { DemoMode.stop() }
         }
     }
 
