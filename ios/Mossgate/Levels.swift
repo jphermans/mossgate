@@ -90,8 +90,16 @@ enum Levels {
                 Solid(x: 1120, y: 960, w: 760, h: 140, oneway: false),
                 Solid(x: 1880, y: 768, w: 360, h: 280, oneway: false),
                 Solid(x: 2320, y: 672, w: 168, h: 26, oneway: true),
-                Solid(x: 2560, y: 544, w: 168, h: 26, oneway: true),
-                Solid(x: 2800, y: 416, w: 180, h: 26, oneway: true),
+                // 96 between ledges, not 128.
+                //
+                // A running jump rises 120 at its very best, and only stays that high for the
+                // middle of its arc — so a 128 step across a 72 gap was a ledge you rush past
+                // and fail to land on. You arrive too low and there is nothing to do about it
+                // once you are underneath. Reported as "some walls and platforms are too high
+                // and character can never jump on it". 96 leaves a comfortable margin over a
+                // single jump and keeps the climb the same length.
+                Solid(x: 2560, y: 576, w: 168, h: 26, oneway: true),
+                Solid(x: 2800, y: 480, w: 180, h: 26, oneway: true),
                 Solid(x: 3040, y: 232, w: 640, h: 28, oneway: true),
             ],
             movers: [

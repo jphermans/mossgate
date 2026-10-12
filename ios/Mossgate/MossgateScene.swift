@@ -1359,6 +1359,13 @@ final class MossgateScene: SKScene {
         cp = snap.cp
         placePlayer(at: snap.point)
         setState(.play)
+        // The HUD has to be told. `setState` only assigns — it has never notified — so without
+        // this the death panel stays on screen over a game that is already running: the buttons
+        // keep offering "Relight" and pressing it appears to do nothing, because the state was
+        // already .play. Reported as "the relight position is good but the alert stays and can
+        // not continue/restart from the relight point". Invisible until now because this
+        // function was unreachable.
+        notifyPhase()
     }
     func pause() { if state == .play { setState(.pause) } }
     func resume() { if state == .pause {
