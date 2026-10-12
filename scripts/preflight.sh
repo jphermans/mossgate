@@ -22,7 +22,12 @@ PROJECT="Mossgate"
 SCHEME="Mossgate"
 TARGET="Mossgate"
 IOS_DIR="ios"
-PROJ_DIR="$IOS_DIR/$PROJECT"
+# Two different directories, and conflating them is what broke the first version of this
+# script: the project is ios/Mossgate.xcodeproj, while the sources and assets live in
+# ios/Mossgate/. Appending the project name to the source dir produced a path that does not
+# exist, so the builds silently "failed" and every check depending on a built .app followed.
+XCODEPROJ="$IOS_DIR/$PROJECT.xcodeproj"
+SRC_DIR="$IOS_DIR/$PROJECT"
 SUPPORT_URL="https://jphermans.github.io/mossgate-support/"
 
 fail=0
@@ -47,7 +52,7 @@ esac
 
 # ── 2. Builds ───────────────────────────────────────────────────────────────────────────
 say "=== Debug simulator build ==="
-if xcodebuild -project "$PROJ_DIR/$PROJECT.xcodeproj" -scheme "$SCHEME" \
+if xcodebuild -project "$XCODEPROJ" -scheme "$SCHEME" \
       -sdk iphonesimulator -configuration Debug \
       CODE_SIGNING_ALLOWED=NO build 2>&1 \
       | grep -E 'error:|SUCCEEDED' | grep -v 'swiftc ' | grep -q 'SUCCEEDED'; then
@@ -59,7 +64,7 @@ fi
 # The simulator build does NOT exercise the App Store path — this is the "would this
 # archive?" command, and the only local proof the binary is buildable for submission.
 say "=== Release device build (the archive check) ==="
-if xcodebuild -project "$PROJ_DIR/$PROJECT.xcodeproj" -scheme "$SCHEME" \
+if xcodebuild -project "$XCODEPROJ" -scheme "$SCHEME" \
       -sdk iphoneos -configuration Release -destination 'generic/platform=iOS' \
       CODE_SIGNING_ALLOWED=NO clean build 2>&1 \
       | grep -E 'error:|SUCCEEDED' | grep -v 'swiftc ' | grep -q 'SUCCEEDED'; then
@@ -68,7 +73,7 @@ else
   miss "Release iphoneos build failed"
 fi
 
-APP=$(xcodebuild -project "$PROJ_DIR/$PROJECT.xcodeproj" -scheme "$SCHEME" -sdk iphoneos \
+APP=$(xcodebuild -project "$XCODEPROJ" -scheme "$SCHEME" -sdk iphoneos \
         -configuration Release -showBuildSettings 2>/dev/null \
       | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2; exit}')/$TARGET.app
 
@@ -142,7 +147,7 @@ fi
 say "=== ExportOptions.plist ==="
 if [ -f "$IOS_DIR/ExportOptions.plist" ]; then
   if grep -q 'YOUR_TEAM_ID' "$IOS_DIR/ExportOptions.plist"; then
-    miss "present but teamID is still the YOUR_TEAM_ID placeholder — it must be your real team ID to sign"
+    miss "present but teamID is still the YOUR_TEAM_ID placeholder. THIS ONE IS YOURS, not the code's: only you can read your team ID off the Apple Developer portal. Nothing uploads until it is real."
   else
     ok "present with a teamID set"
   fi
@@ -152,7 +157,7 @@ fi
 
 # ── 7. App icon ─────────────────────────────────────────────────────────────────────────
 say "=== App icon ==="
-ICONSET="$PROJ_DIR/Assets.xcassets/AppIcon.appiconset"
+ICONSET="$SRC_DIR/Assets.xcassets/AppIcon.appiconset"
 if [ -d "$ICONSET" ]; then
   master=$(ls "$ICONSET"/*.png 2>/dev/null | head -1)
   if [ -n "$master" ]; then
