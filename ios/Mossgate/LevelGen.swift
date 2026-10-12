@@ -33,6 +33,31 @@ enum LevelGen {
     /// being a jump a player would recognise.
     static let maxLedgeHop: CGFloat = 130
 
+    /// The furthest a running jump can carry you and still be at or above `rise`.
+    ///
+    /// The two limits are NOT independent, and treating them as if they were is what put
+    /// unreachable ledges in the game. A 110 rise is only landable up to about 136 units away:
+    /// `maxGap` alone cheerfully allowed 150 of gap at any height, so a gate could ask for a
+    /// step no jump can reach. Derived from the same constants the game runs on, so it cannot
+    /// drift away from them.
+    static func reachForRise(_ rise: CGFloat) -> CGFloat {
+        let v = Phys.jumpV, g = Phys.gRise
+        let disc = v * v - 2 * g * rise
+        guard disc > 0 else { return 0 }            // cannot get that high at all
+        let t = (v + disc.squareRoot()) / g         // the later of the two moments at that height
+        return Phys.run * t
+    }
+
+    /// Whether a step of `step` height across `gap` is actually makeable.
+    ///
+    /// Only the far side is checked. The near side is soft — there is air control, so a jump
+    /// started early can be drifted onto the ledge — but arriving too late cannot be fixed once
+    /// you are below the ledge's top.
+    static func stepIsMakeable(step: CGFloat, gap: CGFloat) -> Bool {
+        guard step > 0 else { return true }         // drops and flats ask nothing
+        return gap <= reachForRise(step)
+    }
+
     /// Ground blocks are cut deep so nothing can fall through one.
     private static let groundDepth: CGFloat = 420
 
@@ -256,7 +281,16 @@ enum LevelGen {
         /// than just a count.
         var worstClearance: CGFloat = .greatestFiniteMagnitude
         var segments: Int = 0
-        var ok: Bool { widestGap <= maxGap && tallestStep <= maxStepUp && bramblesTooTight == 0 }
+        /// Steps that are too tall for the distance asked of them — the joint rule. Kept
+        /// separate from `tallestStep` because a step can be well inside `maxStepUp` and still
+        /// be unreachable if the gap in front of it is long.
+        var stepsBeyondReach: Int = 0
+        /// How far past its own reach the worst one is, so a violation comes with a number.
+        var worstOverreach: CGFloat = 0
+        var ok: Bool {
+            widestGap <= maxGap && tallestStep <= maxStepUp
+                && stepsBeyondReach == 0 && bramblesTooTight == 0
+        }
     }
 
     /// Walks the sorted ground tops and measures every jump the gate demands.
@@ -273,6 +307,14 @@ enum LevelGen {
             let gapStart = prev.x + prev.w
             let gap = cur.x - gapStart
             let step = prev.y - cur.y          // positive = up, negative = down
+
+            // The joint rule: a step is only a jump the player can make if the gap in front of
+            // it is within reach AT THAT HEIGHT. Checking the two limits separately is what
+            // allowed a 150-wide gap in front of a 110-high step, which no jump can do.
+            if step > 0, !stepIsMakeable(step: step, gap: gap) {
+                r.stepsBeyondReach += 1
+                r.worstOverreach = max(r.worstOverreach, gap - reachForRise(step))
+            }
             if gap > 0 {
                 // A gap is only a demand on the player if nothing bridges it. A
                 // mover or a run of one-way ledges means it is crossed, not jumped,
