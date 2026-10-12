@@ -207,8 +207,11 @@ struct SetupView: View {
                     )
                 }
                 VStack(spacing: 6) {
-                    mappingRow("Jump", "A  ·  d-pad up")
-                    mappingRow("Down", "B  ·  d-pad down  ·  stick down")
+                    // Jump moved off d-pad up so the d-pad could look up, matching the on-screen
+                    // arrow pads: the face button jumps, the d-pad pans the camera.
+                    mappingRow("Jump", "A  ·  cross")
+                    mappingRow("Look up", "d-pad up")
+                    mappingRow("Look down", "B  ·  d-pad down  ·  stick down")
                     mappingRow("Move", "left stick  ·  d-pad")
                     mappingRow("Pause", "Menu  ·  Options")
                 }

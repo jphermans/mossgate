@@ -18,9 +18,9 @@ final class GamepadManager {
         var a = false, b = false, menu = false
     }
 
-    /// The game's four inputs, plus the menu button.
+    /// The game's inputs, plus the menu button.
     struct Input: Equatable {
-        var left = false, right = false, jump = false, down = false
+        var left = false, right = false, jump = false, down = false, up = false
         var menu = false
         static let neutral = Input()
     }
@@ -39,8 +39,13 @@ final class GamepadManager {
         var i = Input()
         i.left  = s.dpadLeft  || s.stickX < -stickDeadZone
         i.right = s.dpadRight || s.stickX >  stickDeadZone
-        i.jump  = s.a || s.dpadUp
+        // Jump is the bottom face button (A on Xbox, cross on PlayStation) and nothing else.
+        // It used to be d-pad up as well — a duplicate of a button that already exists, and it
+        // left the d-pad with no way to look up. Asked for as "pick a different to jump when
+        // playing with controller", so the look up could have d-pad up.
+        i.jump  = s.a
         i.down  = s.b || s.dpadDown || s.stickY < -0.5
+        i.up    = s.dpadUp
         i.menu  = s.menu
         return i
     }

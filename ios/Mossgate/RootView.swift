@@ -276,7 +276,7 @@ struct RootView: View {
         let pad = GamepadManager.shared
         pad.onInput = { input in
             session.scene?.setGamepad(left: input.left, right: input.right,
-                                      jump: input.jump, down: input.down)
+                                      jump: input.jump, down: input.down, up: input.up)
         }
         pad.onMenu = { session.scene?.pause() }
         pad.onDevicesChanged = { infos in

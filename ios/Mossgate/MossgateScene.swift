@@ -97,6 +97,8 @@ final class MossgateScene: SKScene {
     private var padRight = false
     private var padJump = false
     private var padDown = false
+    /// Controller look up. D-pad up, now that it no longer doubles as jump.
+    private var padUp = false
     /// Controller input is gated by the Setup toggle.
     private var controllerEnabled = true
 
@@ -105,7 +107,7 @@ final class MossgateScene: SKScene {
     private var inRight: Bool { touchRight || (controllerEnabled && padRight) }
     private var inJump: Bool { touchJump || (controllerEnabled && padJump) }
     private var inDown: Bool { touchDown || (controllerEnabled && padDown) }
-    private var inUp: Bool { touchUp }
+    private var inUp: Bool { touchUp || (controllerEnabled && padUp) }
 
     // Camera
     private var camX: CGFloat = 0
@@ -1215,16 +1217,26 @@ final class MossgateScene: SKScene {
             ("stick left         ", GamepadManager.Snapshot(stickX: -0.9)),
             ("stick in dead zone ", GamepadManager.Snapshot(stickX: 0.2)),
             ("A (jump)           ", GamepadManager.Snapshot(a: true)),
-            ("B (down)           ", GamepadManager.Snapshot(b: true)),
-            ("d-pad up (jump)    ", GamepadManager.Snapshot(dpadUp: true)),
+            ("B (look down)      ", GamepadManager.Snapshot(b: true)),
+            ("d-pad up (look up) ", GamepadManager.Snapshot(dpadUp: true)),
             ("stick pulled down  ", GamepadManager.Snapshot(stickY: -0.8)),
             ("menu               ", GamepadManager.Snapshot(menu: true)),
         ]
         for (label, snap) in cases {
             let i = GamepadManager.map(snap)
             print("[Mossgate:PAD] \(label) -> left=\(i.left) right=\(i.right) "
-                  + "jump=\(i.jump) down=\(i.down) menu=\(i.menu)")
+                  + "jump=\(i.jump) down=\(i.down) up=\(i.up) menu=\(i.menu)")
         }
+
+        // The mapping that changed, asserted rather than only tabulated: the face button jumps
+        // and nothing else does, and d-pad up is the look up. A table can be read wrong; this
+        // line cannot.
+        let aOnly = GamepadManager.map(GamepadManager.Snapshot(a: true))
+        let upOnly = GamepadManager.map(GamepadManager.Snapshot(dpadUp: true))
+        let verdict = (aOnly.jump && !aOnly.up && upOnly.up && !upOnly.jump)
+            ? "OK A jumps, d-pad up looks up"
+            : "FAIL the mapping is not what Setup says"
+        print("[Mossgate:PAD] \(verdict)")
 
         // What GameController actually reports, so the type derivation is checked
         // against a real GCController rather than only in the abstract. Re-read
@@ -1367,7 +1379,7 @@ final class MossgateScene: SKScene {
     /// External controller input. Mirrors `setTouch` so both sources feed the
     /// same physics; the scene ORs them via `inLeft`/`inRight`/`inJump`/`inDown`.
     func setGamepad(left: Bool? = nil, right: Bool? = nil,
-                    jump: Bool? = nil, down: Bool? = nil) {
+                    jump: Bool? = nil, down: Bool? = nil, up: Bool? = nil) {
         if let v = left { padLeft = v }
         if let v = right { padRight = v }
         if let v = jump { padJump = v }
@@ -1375,6 +1387,8 @@ final class MossgateScene: SKScene {
             // Same rule as the pad: controller DOWN must not drop you off a ledge.
             padDown = v
         }
+        // Look up. Like the on-screen pad, this is a camera pan with no physics of its own.
+        if let v = up { padUp = v }
     }
 
     /// Setup toggle: ignore controller input when off.
