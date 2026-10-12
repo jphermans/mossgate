@@ -277,7 +277,10 @@ struct RootView: View {
                     // Deferred like -StartInLevel: -SkipSplash's own transition runs a beat later,
                     // and setting the phase here immediately would simply be overwritten by it.
                     if args.contains("-CoinRush") {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        // Later than -SkipSplash's own 0.4s transition, not alongside it: two timers
+                        // at the same deadline resolve by luck, and this one has to land second to
+                        // survive.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
                             SettingsStore.shared.startCoinRushRun()
                             gameLevelIndex = 0
                             withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
