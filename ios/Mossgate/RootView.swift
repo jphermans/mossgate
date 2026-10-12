@@ -60,14 +60,32 @@ struct RootView: View {
     }
 
     /// Portrait while the splash is up, and portrait again while a Duo is closed — the outer
-    /// display is a portrait surface and the level list is a vertical scroll, so holding it
-    /// upright there is right. Landscape otherwise: the level select and the game as designed.
+    /// display is a portrait surface, so holding it upright there is right. Landscape otherwise:
+    /// the level select and the game as designed.
     private func applyOrientationLock() {
-        AppDelegate.orientationLock =
+        let mask: UIInterfaceOrientationMask =
             (phase == .splash || !duoPose.canPlay) ? .portrait : .landscape
-        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-            scene.windows.first?.rootViewController?
-                .setNeedsUpdateOfSupportedInterfaceOrientations()
+        guard AppDelegate.orientationLock != mask else { return }
+        AppDelegate.orientationLock = mask
+        adopt(mask)
+    }
+
+    /// Asks the scene to actually adopt the mask that was just set.
+    ///
+    /// `setNeedsUpdateOfSupportedInterfaceOrientations()` alone is not enough. It re-evaluates
+    /// what is permitted but leaves the current orientation where it is, so a change made while
+    /// the app is already laid out — the splash handing over to the level list, or a Duo folding
+    /// under a running app — is simply not acted on. `requestGeometryUpdate` is the call that
+    /// asks for the rotation.
+    ///
+    /// That omission is what produced the black screen: on a folded Duo the first lock applied a
+    /// landscape mask to a portrait display, and every later correction was accepted and ignored,
+    /// so the app sat there drawing nothing for the rest of the session.
+    private func adopt(_ mask: UIInterfaceOrientationMask) {
+        guard let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene else { return }
+        scene.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
+            print("[orientation] could not adopt \(mask): \(error.localizedDescription)")
         }
     }
 
@@ -196,16 +214,19 @@ struct RootView: View {
                     if ProcessInfo.processInfo.arguments.contains("-TestSfx") {
                         AudioEngine.shared.runSfxProbe()
                     }
-                    // Seed the pose from the scene's own geometry BEFORE any orientation lock is
+                    // Seed the pose from the window's own size BEFORE any orientation lock is
                     // applied.
                     //
-                    // The representable's report only arrives after the first layout, so without
-                    // this the opening move on a folded Duo is a landscape mask on a portrait
-                    // display — which is a black screen. That is the exact fault this whole
-                    // mechanism exists to prevent, and it happened on launch rather than on the
-                    // fold, which is why it survived the earlier testing.
-                    if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                        duoPose = DuoPose.fromWindowSize(scene.coordinateSpace.bounds.size)
+                    // Read from the key window rather than the scene's coordinate space: at
+                    // `onAppear` the scene exists but its bounds can still be zero, and a zero
+                    // size classifies as `.unknown` — which means landscape, which on a folded
+                    // Duo is the black screen. The window is sized by the time this runs.
+                    if let keyWindow = UIApplication.shared.connectedScenes
+                        .compactMap({ $0 as? UIWindowScene })
+                        .flatMap(\.windows)
+                        .first(where: { $0.isKeyWindow }),
+                       keyWindow.bounds.width > 0, keyWindow.bounds.height > 0 {
+                        duoPose = DuoPose.fromWindowSize(keyWindow.bounds.size)
                     }
                     AppDelegate.orientationLock = .portrait
                     let args = ProcessInfo.processInfo.arguments

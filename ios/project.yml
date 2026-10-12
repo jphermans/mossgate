@@ -20,8 +20,8 @@ settings:
     #   ./scripts/bump-ios-version.py --patch    # 0.1.0 -> 0.1.1  (bugfix batch)
     #   ./scripts/bump-ios-version.py --minor    # 0.1.0 -> 0.2.0  (new features)
     # The script rewrites these two lines and re-runs xcodegen.
-    MARKETING_VERSION: "0.7.39"
-    CURRENT_PROJECT_VERSION: "62"
+    MARKETING_VERSION: "0.7.40"
+    CURRENT_PROJECT_VERSION: "63"
     SWIFT_STRICT_CONCURRENCY: minimal
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
