@@ -43,6 +43,16 @@ final class MossgateScene: SKScene {
     // Progress
     private var coinsGot: Set<Int> = []
     private var lanternsGot: Set<Int> = []
+
+    /// Lanterns that have already paid out a life on THIS gate.
+    ///
+    /// Separate from `lanternsGot` on purpose, and deliberately not part of the progress
+    /// snapshot. `lanternsGot` is about what is still lying on the ground, so restoring it from a
+    /// snapshot and resetting it on a restart is right. This is about what has already been PAID
+    /// for, and it has to survive both — otherwise the light is infinite: die, walk back through a
+    /// lantern the checkpoint restored, collect the same life again, forever. That was the
+    /// reported loop, `2/3 -> die -> 3/3 -> 2/3`, and it made the game impossible to lose.
+    private var lanternsAwarded: Set<Int> = []
     /// Pickup positions for this load, after the per-run jitter. BOTH the sprite
     /// and the pickup test read these, so the two can never disagree — the
     /// collection tests used to read `level.coins[i]` directly.
@@ -907,6 +917,10 @@ final class MossgateScene: SKScene {
             attemptNonce &+= 1
             coinsReshuffled = false
             deathsThisAttempt = 0
+        // A different gate has its own lanterns, so the ledger empties with it. Reset HERE and
+        // never on a restart or a respawn: replaying the same gate must not re-arm the light,
+        // which is the entire reason this is tracked apart from `lanternsGot`.
+        lanternsAwarded = []
         }
         loadLevel(index: index, toState: .play)
         runMoverTestIfRequested()
@@ -1878,7 +1892,13 @@ final class MossgateScene: SKScene {
             let l = i < lanternPos.count ? lanternPos[i] : CGPoint(x: level.lanterns[i].x, y: level.lanterns[i].y)
             if hypot(feetX - l.x, midY - l.y) < 46 {
                 lanternsGot.insert(i)
-                SettingsStore.shared.gainLife()
+                // Paid once per gate. The pickup itself still happens every time — the lantern
+                // leaves the ground, the burst fires, the sound plays — so a respawn reads as a
+                // real pickup rather than as a lantern that refused to be taken. It just cannot
+                // pay twice.
+                if lanternsAwarded.insert(i).inserted {
+                    SettingsStore.shared.gainLife()
+                }
                 AudioEngine.shared.checkpoint()
                 Haptics.checkpoint()
                 burst(at: CGPoint(x: l.x, y: l.y), count: 14,
