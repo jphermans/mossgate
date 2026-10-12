@@ -266,3 +266,46 @@ extension SettingsStore {
         gates = Levels.build(seed: clamped)
     }
 }
+
+
+/// How well a gate has been played, judged by the best coin run against that gate's total.
+///
+/// Thresholds are thirds, and the top tier is all of them: a medal for reaching the flag would
+/// be a medal for turning up, and every gate is reachable. The tiers only mean anything because
+/// coins can be missed — they are placed where they are hard to collect, not sprinkled on the
+/// path.
+///
+/// `nil` for none rather than a colour that happens to look like background: a gate nobody has
+/// cleared well should show no medal at all, not a dim one.
+enum GateMedal {
+    case none, bronze, silver, gold
+
+    /// One glyph for all three tiers; the tint carries the meaning. Three different symbols
+    /// would need three glyphs that exist on every supported OS, and the app's palette already
+    /// reads a colour change better than a shape change at 9pt.
+    var symbol: String? { self == .none ? nil : "star.fill" }
+
+    /// The palette NAME, not a `Color`. This file is data, not UI, and it does not import
+    /// SwiftUI — resolving the name is the view's job.
+    var tintName: String {
+        switch self {
+        case .none:   return "MossgateMuted"
+        case .gold:   return "MossgateLantern"
+        case .silver: return "MossgateCream"
+        case .bronze: return "MossgateMuted"
+        }
+    }
+}
+
+extension SettingsStore {
+    /// The medal for a gate, given its coin total.
+    func medal(for level: Int, of total: Int) -> GateMedal {
+        guard total > 0, level < bestCoins.count else { return .none }
+        let best = bestCoins[level]
+        if best >= total { return .gold }
+        let ratio = Double(best) / Double(total)
+        if ratio >= 2.0 / 3.0 { return .silver }
+        if ratio >= 1.0 / 3.0 { return .bronze }
+        return .none
+    }
+}

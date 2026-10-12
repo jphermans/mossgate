@@ -274,7 +274,14 @@ struct TitleView: View {
                                                 .tracking(2)
                                                 .foregroundStyle(Color("MossgateLantern"))
                                         }
-                                        Text("\(settings.bestCoins[level.id])/\(level.coins.count)")
+                                        HStack(spacing: 4) {
+                                            // Medal first, count second: the star is the
+                                            // summary and the number is the detail.
+                                            Image(systemName: settings.medal(for: level.id, of: level.coins.count).symbol ?? "")
+                                                .font(.system(size: 9))
+                                                .foregroundStyle(Color(settings.medal(for: level.id, of: level.coins.count).tintName))
+                                            Text("\(settings.bestCoins[level.id])/\(level.coins.count)")
+                                        }
                                             .font(.system(size: 12, design: .monospaced))
                                             .foregroundStyle(Color("MossgateMuted"))
                                     }
