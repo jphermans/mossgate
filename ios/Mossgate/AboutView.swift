@@ -103,7 +103,7 @@ struct AboutView: View {
                 sprite("jump-1", size: 38)
             }
             divider
-            infoRow(title: "Down", detail: "Look down over an edge, dive faster while falling, or drop down through a pale ledge.") {
+            infoRow(title: "Down", detail: "Look down over an edge, or dive faster while falling.") {
                 sprite("ledge", size: 38)
             }
         }
@@ -133,7 +133,7 @@ struct AboutView: View {
                 sprite("flag-1", size: 34)
             }
             divider
-            infoRow(title: "Stone and ledges", detail: "Stone is solid everywhere. Pale ledges hold you up, and you can drop down through them.") {
+            infoRow(title: "Stone and ledges", detail: "Stone is solid everywhere. Pale ledges are one-way: they hold you up, and you can jump up through them from below.") {
                 HStack(spacing: 6) {
                     sprite("block", size: 34)
                     sprite("ledge", size: 34)
