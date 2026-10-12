@@ -104,7 +104,14 @@ struct RootView: View {
                         // The title screen already refuses, but a locked gate must not
                         // be reachable by any other caller either.
                         guard SettingsStore.shared.gateUnlocked(idx) else {
-                            SettingsStore.shared.notice = "That gate is still locked."
+                            // Name the gate that is in the way, in the same voice the locked-world
+                            // tap already uses. "That gate is still locked" was true and useless:
+                            // the player is looking at a list where several rows are locked, and
+                            // it did not say which one was blocking this one or what opened it.
+                            let all = Levels.all
+                            let prev = (idx > 0 && idx - 1 < all.count)
+                                ? all[idx - 1].name : "the gate before it"
+                            SettingsStore.shared.notice = "Finish \(prev) to open this one."
                             return
                         }
                         gameLevelIndex = idx
