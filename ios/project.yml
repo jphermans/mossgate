@@ -20,8 +20,8 @@ settings:
     #   ./scripts/bump-ios-version.py --patch    # 0.1.0 -> 0.1.1  (bugfix batch)
     #   ./scripts/bump-ios-version.py --minor    # 0.1.0 -> 0.2.0  (new features)
     # The script rewrites these two lines and re-runs xcodegen.
-    MARKETING_VERSION: "0.7.34"
-    CURRENT_PROJECT_VERSION: "57"
+    MARKETING_VERSION: "0.7.35"
+    CURRENT_PROJECT_VERSION: "58"
     SWIFT_STRICT_CONCURRENCY: minimal
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
@@ -32,7 +32,13 @@ settings:
     INFOPLIST_KEY_UILaunchScreen_Generation: YES
     INFOPLIST_KEY_UILaunchScreen_BackgroundColor: "MossgateDusk"
     INFOPLIST_KEY_UILaunchScreen_ImageName: "LaunchLantern"
-    INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+    # Portrait is allowed because of the iPhone Duo's outer display. `orientationLock` in
+    # AppDelegate holds portrait while the splash is up and while a folded Duo is showing —
+    # but iOS intersects that mask with THIS list, so with only landscape declared the
+    # runtime portrait lock is silently refused. Allowing portrait here does not leak onto
+    # ordinary iPhones: the delegate returns .landscape for the title and the game, and an
+    # intersection cannot add orientations the delegate did not ask for.
+    INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
     # The ~ipad variant is gone with iPad support. Keeping it would advertise an iPad
     # orientation set for a binary that no longer supports iPad at all.
     # REMOVED: INFOPLIST_KEY_UIRequiresFullScreen. Deprecated since iOS 26 and ignored by

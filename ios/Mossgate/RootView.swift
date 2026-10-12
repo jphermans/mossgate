@@ -15,8 +15,40 @@ struct RootView: View {
     @StateObject private var touch = TouchState()
     @StateObject private var session = GameSession()
     @ObservedObject private var store = Store.shared
+    /// Which way an iPhone Duo is folded. `.unknown` everywhere else, and on a Duo it stays
+    /// `.unknown` until the hinge actually reports — which is the safe direction to be wrong in.
+    @State private var duoPose: DuoPose = .unknown
 
     enum Phase: Equatable { case splash, title, game }
+
+    /// The single place that decides whether a run may start, which is why it is a function
+    /// and not two guards: the level cards and the daily card both come through here, and a
+    /// rule repeated at two call sites is a rule that drifts.
+    ///
+    /// Closed, the outer display is portrait — comfortable for the splash and the level list,
+    /// the wrong shape for a landscape canvas. Refusing before the tap is accepted, rather
+    /// than after a level has loaded, is the point: a run you cannot see is worse than a
+    /// refusal you can read.
+    private func refuseIfFolded() -> Bool {
+        guard !duoPose.canPlay else { return false }
+        // Goes through the existing single alert channel rather than adding a second `.alert`
+        // to this view — the file already notes that two alerts compete for the same parent.
+        SettingsStore.shared.notice =
+            "Open your iPhone Duo to play — Mossgate runs on the inner display."
+        return true
+    }
+
+    /// Portrait while the splash is up, and portrait again while a Duo is closed — the outer
+    /// display is a portrait surface and the level list is a vertical scroll, so holding it
+    /// upright there is right. Landscape otherwise: the level select and the game as designed.
+    private func applyOrientationLock() {
+        AppDelegate.orientationLock =
+            (phase == .splash || !duoPose.canPlay) ? .portrait : .landscape
+        if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+            scene.windows.first?.rootViewController?
+                .setNeedsUpdateOfSupportedInterfaceOrientations()
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -31,6 +63,7 @@ struct RootView: View {
             case .title:
                 TitleView(
                     onStartLevel: { idx in
+                        if refuseIfFolded() { return }
                         // The title screen already refuses, but a locked gate must not
                         // be reachable by any other caller either.
                         guard SettingsStore.shared.gateUnlocked(idx) else {
@@ -41,6 +74,7 @@ struct RootView: View {
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
                     },
                     onStartDaily: { idx in
+                        if refuseIfFolded() { return }
                         // Deliberately not guarded. The daily is free for everyone by design,
                         // and the gate it lives on is behind the progression chain, so the
                         // ordinary unlock check would refuse it — which is precisely what
@@ -73,6 +107,13 @@ struct RootView: View {
                 gameStack
                     .transition(.opacity)
             }
+        }
+        .overlay(alignment: .topLeading) {
+            // Reads the Duo hinge. One point in the corner: `UIHingeInteraction` has to live in
+            // a view hierarchy to receive updates, and a zero-sized view is not guaranteed to.
+            HingeReader { duoPose = $0 }
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
         }
         // Sheet must be attached to a stable parent — not inside the switch,
         // otherwise it gets torn down the moment `phase` changes and never
@@ -107,13 +148,11 @@ struct RootView: View {
         .onReceive(SettingsStore.shared.$runSeed) { _ in
             session.scene?.retryLevel()
         }
-        .onChange(of: phase) { _, newValue in
-            AppDelegate.orientationLock = (newValue == .splash) ? .portrait : .landscape
-            if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                scene.windows.first?.rootViewController?
-                    .setNeedsUpdateOfSupportedInterfaceOrientations()
-            }
-        }
+        .onChange(of: phase) { _, _ in applyOrientationLock() }
+        // Opening or closing the Duo moves the UI to the other display, so the mask has to be
+        // re-applied then as well — reacting only to a phase change would leave a newly closed
+        // Duo showing the level list in landscape on a portrait surface.
+        .onChange(of: duoPose) { _, _ in applyOrientationLock() }
         .onAppear {
                     wireController()
                     Store.shared.start()
@@ -124,6 +163,13 @@ struct RootView: View {
                     }
                     AppDelegate.orientationLock = .portrait
                     let args = ProcessInfo.processInfo.arguments
+                    // Test hook: -ForceClosed 1 / -ForceOpen 1 pretend the Duo is shut or open,
+                    // so the outer-display layout and the refusal can be exercised on any
+                    // simulator. The simulator exposes one framebuffer per display but has no
+                    // headless way to fold the device, so without these the closed path would
+                    // be unverifiable on this machine.
+                    if args.contains("-ForceClosed") { duoPose = .closed }
+                    else if args.contains("-ForceOpen") { duoPose = .open }
                     // Test hook: -OpenSetup 1 lands on the title screen with the
                     // Setup sheet already presented (used to verify the sheet
                     // wiring without a simulator tap).
