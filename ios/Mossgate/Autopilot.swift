@@ -156,8 +156,13 @@ enum Autopilot {
             ride = -1
 
             for s in level.solids where !s.oneway {
-                if !rect.intersects(CGRect(x: s.x, y: s.y, width: s.w, height: s.h)) { continue }
+                let r = CGRect(x: s.x, y: s.y, width: s.w, height: s.h)
+                if !rect.intersects(r) { continue }
                 if vy >= 0 && prevBottom <= s.y + 4 {
+                    // Same foothold rule as the scene, from Phys, so the two cannot
+                    // drift apart and the coins keep being placed for the real game.
+                    let pr = CGRect(x: x, y: y, width: Phys.playerW, height: Phys.playerH)
+                    if !Phys.hasFoothold(pr, on: r) { continue }
                     y = s.y - Phys.playerH
                     vy = 0
                     grounded = true; groundKind = "solid"
@@ -171,7 +176,8 @@ enum Autopilot {
                 for s in level.solids where s.oneway {
                     let r = CGRect(x: s.x, y: s.y, width: s.w, height: s.h)
                     if prevBottom > r.minY + 6 { continue }
-                    if !rect.intersects(r) { continue }
+                    if !Phys.hasFoothold(CGRect(x: x, y: y, width: Phys.playerW,
+                                                height: Phys.playerH), on: r) { continue }
                     y = r.minY - Phys.playerH
                     vy = 0
                     grounded = true; groundKind = "oneway"
@@ -180,7 +186,8 @@ enum Autopilot {
                     let mp = moverPos[i]
                     let r = CGRect(x: mp.x, y: mp.y, width: m.w, height: m.h)
                     if prevBottom > r.minY + 6 { continue }
-                    if !rect.intersects(r) { continue }
+                    if !Phys.hasFoothold(CGRect(x: x, y: y, width: Phys.playerW,
+                                                height: Phys.playerH), on: r) { continue }
                     y = r.minY - Phys.playerH
                     vy = 0
                     grounded = true; groundKind = "mover"

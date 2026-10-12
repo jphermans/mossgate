@@ -29,6 +29,30 @@ enum Phys {
     /// Grounded with DOWN held: how far the camera biases down, in world units.
     /// Big enough to push past the camera's dead zone so the pan is visible.
     static let lookDown: CGFloat = 140
+
+    // ── Foothold ──────────────────────────────────────────────────
+    /// How much of the player's width must be over a platform before it holds
+    /// them up.
+    ///
+    /// Landing used to accept ANY overlap, so a single unit of the player's 18
+    /// was enough. The character could therefore stand almost entirely off the
+    /// edge of a ledge without falling — it looks like the collision has come
+    /// loose, and it was reported as a bug ("the character is already off the
+    /// platform without falling"). Half the width is the same statement as "the
+    /// player's centre has to be over the platform", which is what players
+    /// already expect from every other platformer.
+    static let foothold: CGFloat = playerW / 2
+
+    /// True when `p` has a real foothold on `platform`, not just a toe on it.
+    ///
+    /// Deliberately only used for SUPPORT. Head bumps, walls and spikes still use
+    /// plain rectangle overlap: clipping a ceiling with your shoulder should stop
+    /// your jump, and requiring half a body's overlap for that would let you pass
+    /// through the corner of a block.
+    static func hasFoothold(_ p: CGRect, on platform: CGRect) -> Bool {
+        let overlapX = min(p.maxX, platform.maxX) - max(p.minX, platform.minX)
+        return overlapX >= foothold
+    }
 }
 
 enum GameState {

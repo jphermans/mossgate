@@ -282,6 +282,88 @@ final class MossgateScene: SKScene {
         runLevelGenTestIfRequested()
         runCoinTestIfRequested()
         runSettingsTestIfRequested()
+        runEdgeTestIfRequested()
+    }
+
+    /// Test hook: `-TestEdge 1` stands the player at the edge of the first wide
+    /// platform twice — once with a real foothold, once with only a toe on it — and
+    /// reports whether each position holds.
+    ///
+    /// The pair is the test. "A toe no longer holds you up" also passes if support
+    /// has simply broken, and the foothold case is what rules that out.
+    private func runEdgeTestIfRequested() {
+        guard ProcessInfo.processInfo.arguments.contains("-TestEdge") else { return }
+
+        // The rule itself, either side of its boundary. Level-independent, which
+        // matters here: the gates I have are dense enough that no platform edge is
+        // free of a neighbour, so this is what actually verifies the arithmetic.
+        for (overlap, expected) in [(CGFloat(12), true), (9, true), (8, false), (3, false)] {
+            let platform = CGRect(x: 0, y: 0, width: 200, height: 10)
+            let p = CGRect(x: 200 - overlap, y: 0, width: Phys.playerW, height: Phys.playerH)
+            let got = Phys.hasFoothold(p, on: platform)
+            let verdict = (got == expected) ? "ok" : "WRONG"
+            print("[Mossgate:EDGE] rule overlap=\(Int(overlap)) expected=\(expected) "
+                  + "got=\(got) \(verdict)")
+        }
+
+        func rect(atX x: CGFloat, top: CGFloat) -> CGRect {
+            CGRect(x: x, y: top - Phys.playerH, width: Phys.playerW, height: Phys.playerH)
+        }
+        func supporting(atX x: CGFloat, top: CGFloat) -> Int {
+            level.solids.filter { !$0.oneway }.reduce(into: 0) { n, s in
+                let r = CGRect(x: s.x, y: s.y, width: s.w, height: s.h)
+                if r.intersects(rect(atX: x, top: top)) && Phys.hasFoothold(rect(atX: x, top: top), on: r) {
+                    n += 1
+                }
+            }
+        }
+
+        // Pick an edge nothing else holds up: a real foothold on `s` alone, and no
+        // foothold at all three units outside it. Taking the first wide platform
+        // instead picked the level floor, where the next ground block legitimately
+        // took over and the "toe" case held up — the test passed for the wrong reason.
+        //
+        // The width floor is deliberately low: a high threshold selects the ground,
+        // which is continuous, so every candidate is disqualified by its neighbour and
+        // the test reports nothing to test at all.
+        var considered = 0
+        guard let s = level.solids.first(where: { c in
+            guard !c.oneway, c.w > 40 else { return false }
+            considered += 1
+            return supporting(atX: c.x + c.w - 12, top: c.y) == 1
+                && supporting(atX: c.x + c.w - 3, top: c.y) == 0
+        }) else {
+            print("[Mossgate:EDGE] no isolated platform edge on this gate "
+                  + "(\(considered) candidate platforms) — nothing to test")
+            return
+        }
+
+        func settle(overlap: CGFloat, label: String, done: @escaping () -> Void) {
+            // Place the player so exactly `overlap` units of their width sit on the
+            // platform's right edge, a little above the surface, and let them drop.
+            playerX = s.x + s.w - overlap
+            playerY = s.y - Phys.playerH - 40
+            playerVy = 0
+            playerVx = 0
+            grounded = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) { [weak self] in
+                guard let self else { return }
+                let offset = self.playerY - (s.y - Phys.playerH)
+                let held = self.grounded && abs(offset) < 6
+                let verdict = held ? "HELD" : "FELL"
+                print("[Mossgate:EDGE] \(label) overlap=\(Int(overlap)) "
+                      + "grounded=\(self.grounded) offsetFromSurface=\(Int(offset)) \(verdict)")
+                done()
+            }
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            print("[Mossgate:EDGE] platform x=\(Int(s.x)) w=\(Int(s.w)) top=\(Int(s.y)) "
+                  + "footholdRequired=\(Int(Phys.foothold)) of playerW=\(Int(Phys.playerW))")
+            settle(overlap: 12, label: "foothold") {
+                settle(overlap: 3, label: "toe-only") {}
+            }
+        }
     }
 
     /// Test hook: `-TestSettings 1` reports the persisted preferences, and
@@ -1368,8 +1450,13 @@ final class MossgateScene: SKScene {
 
         // Solid landings
         for s in level.solids where !s.oneway {
-            if !overlaps(playerRect, CGRect(x: s.x, y: s.y, width: s.w, height: s.h)) { continue }
+            let r = CGRect(x: s.x, y: s.y, width: s.w, height: s.h)
+            if !overlaps(playerRect, r) { continue }
             if playerVy >= 0 && prevBottom <= s.y + 4 {
+                // Held up only by a real foothold — a toe on the edge no longer counts.
+                // Head bumps below keep using plain overlap, so clipping a ceiling
+                // with your shoulder still stops the jump.
+                if !Phys.hasFoothold(playerRect, on: r) { continue }
                 playerY = s.y - Phys.playerH
                 playerVy = 0
                 grounded = true; groundKind = "solid"
@@ -1384,7 +1471,7 @@ final class MossgateScene: SKScene {
             for s in level.solids where s.oneway {
                 let r = CGRect(x: s.x, y: s.y, width: s.w, height: s.h)
                 if prevBottom > r.minY + 6 { continue }
-                if !overlaps(playerRect, r) { continue }
+                if !Phys.hasFoothold(playerRect, on: r) { continue }
                 playerY = r.minY - Phys.playerH
                 playerVy = 0
                 grounded = true; groundKind = "oneway"
@@ -1393,7 +1480,7 @@ final class MossgateScene: SKScene {
                 let mp = moverPositions[i]
                 let r = CGRect(x: mp.x, y: mp.y, width: m.w, height: m.h)
                 if prevBottom > r.minY + 6 { continue }
-                if !overlaps(playerRect, r) { continue }
+                if !Phys.hasFoothold(playerRect, on: r) { continue }
                 playerY = r.minY - Phys.playerH
                 playerVy = 0
                 grounded = true; groundKind = "mover"
@@ -1428,6 +1515,13 @@ final class MossgateScene: SKScene {
                 coinsGot.insert(i)
                 AudioEngine.shared.coin()
                 burst(at: CGPoint(x: c.x, y: c.y), count: 8, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 70)
+                // The HUD only redraws when notifyPhase() runs. The lantern branch
+                // below always called it; this one never did, so the coin counter sat
+                // at 0 while coins were demonstrably being taken — reported as "the
+                // coin counter is meanwhile still on 0 while there are already coins
+                // taken", and quite possibly read as coins not being collectable at
+                // all.
+                notifyPhase()
             }
         }
 
