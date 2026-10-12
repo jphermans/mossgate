@@ -561,12 +561,21 @@ enum Autopilot {
     /// question, and not quite — and the gap between them is exactly where a coin
     /// that looks reachable turns out not to be.
     static func collectible(_ coin: CGPoint, level: Level,
-                            phase: [CGFloat], period: [CGFloat]) -> Bool {
+                            phase: [CGFloat], period: [CGFloat],
+                            singleJumpOnly: Bool = false) -> Bool {
         guard let ground = surfaceBelow(coin, level: level) else { return false }
         let dt: CGFloat = 1.0 / 120.0
-        let launches: [(CGFloat, CGFloat?)] = [
+        // A coin is meant to be taken with one ordinary jump. The double-jump launches
+        // ask "could a determined player reach this", which is the wrong question for
+        // placement: a coin needing a precisely timed double jump is one the player jumps
+        // at and misses, which is how it reads in play — "the character has to jump now
+        // but coins are not taken when jumping".
+        var launches: [(CGFloat, CGFloat?)] = [
             (0, nil), (70, nil), (150, nil), (70, 0.22), (150, 0.34),
         ]
+        if singleJumpOnly {
+            launches = [(0, nil), (40, nil), (70, nil), (110, nil), (150, nil)]
+        }
         for (runUp, second) in launches {
             var sim = Sim(level: level, phase: phase, period: period)
             sim.place(x: ground.x - runUp, y: ground.y - Phys.playerH)
@@ -668,58 +677,150 @@ enum Autopilot {
         return best?.p
     }
 
-    /// The coin layout for a gate.
+    /// Coins placed to be jumped for, in fresh random spots.
     ///
-    /// Coins stay on the path the player actually takes. In order:
+    /// Requested: "When the coin position is higher then the character height then the
+    /// character must always jump to take the coin", and "the coin position is always
+    /// different when a level starts". So each coin takes a random x along the floor
+    /// and floats above it — comfortably over the player's head, so walking past never
+    /// takes it and a jump always does.
     ///
-    ///  1. **The nearest point of the runner's route** — a real playthrough, so the
-    ///     coin is somewhere the player genuinely went, and anchored to the designed
-    ///     position so it is still on the way past.
-    ///  2. **The authored position, nudged slightly**, validated.
-    ///  3. The far-moving probe, only when 1 and 2 both fail the pickup test.
+    /// This replaces the earlier placement, which anchored every coin to where the
+    /// level authored it and pulled several down to chest height so they sat on the
+    /// beaten path. That was the right answer to "coins are being missed" and the wrong
+    /// answer to "a coin should be worth going for".
     ///
-    /// The ordering is the lesson from getting this wrong twice. A first version moved
-    /// coins 78-183 units off the route and the test still called them fine; a second
-    /// sampled the route by arc length and moved them up to 2742. Both asked "is this
-    /// coin reachable from where it sits" when the question is "does the player go
-    /// there" — local reachability is not reachability.
+    /// Every candidate still goes through the same jump proof, so "you have to jump for
+    /// it" cannot quietly become "you cannot get it". A coin nothing can reach keeps the
+    /// level's own position rather than being dropped.
     static func coinLayout(level: Level, phase: [CGFloat], period: [CGFloat],
                            seed: Int) -> (coins: [CGPoint], source: String) {
-        let run = route(level: level, phase: phase, period: period)
-
-        var movedFar = 0
-        var onRoute = 0
-        let out = level.coins.enumerated().map { i, c -> CGPoint in
-            let anchor = CGPoint(x: c.x, y: c.y)
-
-            // 1. The path the runner took, near where this coin was designed to be.
-            //    A route point is by construction somewhere the player was, so it needs
-            //    no separate reachability proof — only that it is near the anchor.
-            if !run.isEmpty, let p = nearestRoutePoint(run, to: anchor, limit: 170) {
-                onRoute += 1
-                return p
-            }
-
-            // 2. Where the level was designed for the player to go.
-            let nudgedSpot = nudged(anchor, index: i, level: level, seed: seed &+ i &* 977)
-            if collectible(nudgedSpot, level: level, phase: phase, period: period) {
-                return nudgedSpot
-            }
-            if collectible(anchor, level: level, phase: phase, period: period) {
-                return anchor
-            }
-
-            // 3. Neither worked. Only now is it worth moving the coin somewhere else.
-            movedFar += 1
-            return placeCoin(anchor: anchor, index: i, level: level,
-                             phase: phase, period: period, seed: seed &+ i &* 977)
+        var state = UInt64(bitPattern: Int64(seed)) | 1
+        func unit() -> CGFloat {
+            state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return CGFloat((state >> 33) % 1_000) / 1_000.0
         }
+        // 45 is well over the player's 32-unit height, so the coin always needs a jump.
+        // 115 is around the limit of a single jump — and the proof below is what really
+        // decides, so the band only has to be a good guess.
+        let bandLow: CGFloat = 45
+        let bandHigh: CGFloat = 95
+        let span = max(1, level.width - 120)
+
+        var out: [CGPoint] = []
+        var proven = 0
+        var guaranteed = 0
+        var unplaced = 0
+        let started = DispatchTime.now().uptimeNanoseconds
+
+        // Two hard bounds, because a layout is computed on the main thread inside a level
+        // load and the watchdog terminates an app that spends seconds there.
+        //
+        // The first version of this tried up to 60 spots per coin with a full jump proof
+        // each — roughly 400,000 simulation steps for one coin, millions for a gate — and
+        // the app was killed on launch with "Thread 1: signal SIGTERM". A layout that
+        // cannot finish is worse than a layout that is less clever, so when either budget
+        // runs out the coin keeps the level's own position, which is always valid.
+        let deadlineNs = started &+ 250_000_000          // 250 ms for the whole layout
+        let triesPerCoin = 10
+        var proofsLeft = 4 * level.coins.count + 30
+
+        for i in level.coins.indices {
+            let anchor = CGPoint(x: level.coins[i].x, y: level.coins[i].y)
+            var chosen: CGPoint?
+
+            // 1. A random spot an ordinary jump can take.
+            for _ in 0..<triesPerCoin {
+                if proofsLeft <= 0 || DispatchTime.now().uptimeNanoseconds > deadlineNs { break }
+                let x = 60 + unit() * span
+                // The TOPMOST surface at x, not the floor. The proof stands on whatever is
+                // directly under the coin, so placing relative to anything else leaves the
+                // coin hanging over a surface the proof never used — and a coin hanging
+                // over a pit is one the player jumps at in vain.
+                guard let surfaceY = surfaceTopUnder(x, level: level) else { continue }
+                let c = CGPoint(x: x, y: surfaceY - (bandLow + unit() * (bandHigh - bandLow)))
+                // The cheap rejections come first; the proof is the expensive one.
+                guard !insideSolid(c, level: level) else { continue }
+                proofsLeft -= 1
+                if collectible(c, level: level, phase: phase, period: period,
+                               singleJumpOnly: true) {
+                    chosen = c
+                    proven += 1
+                    break
+                }
+            }
+
+            // 2. Where the level author put it, if that one is takeable — better a spot
+            //    the level was designed around than one invented below.
+            if chosen == nil, proofsLeft > 0, !insideSolid(anchor, level: level) {
+                proofsLeft -= 1
+                if collectible(anchor, level: level, phase: phase, period: period,
+                               singleJumpOnly: true) {
+                    chosen = anchor
+                    proven += 1
+                }
+            }
+
+            // 3. GUARANTEED. "Make sure that wherever the coins hangs, these are always
+            //    grabable for the character." The first two steps are proofs, so they can
+            //    fail; this one is arithmetic, so it cannot. A coin beside the nearest
+            //    surface is inside the player's standing pickup radius — no jump, no
+            //    simulation, no way to miss it. It is the least interesting place a coin
+            //    can be, which is exactly why it is the last resort: a coin you can see
+            //    and cannot take is worse than no coin at all.
+            if chosen == nil {
+                chosen = guaranteedGrabSpot(near: anchor, level: level)
+                if chosen != nil { guaranteed += 1 } else { unplaced += 1 }
+            }
+
+            out.append(chosen ?? anchor)
+        }
+        let ms = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000.0
         if ProcessInfo.processInfo.arguments.contains("-TestCoins") {
             print("[Mossgate:COIN]   \(level.name): \(level.coins.count) coins, "
-                  + "onRoute=\(onRoute) movedFar=\(movedFar)")
+                  + "jumpProven=\(proven) guaranteedGrab=\(guaranteed) unplaced=\(unplaced) "
+                  + "took=\(String(format: "%.0f", ms))ms")
         }
-        let source = onRoute > 0 ? "route" : (movedFar == 0 ? "authored" : "authored+distant")
-        return (out, source)
+        let allTakeable = unplaced == 0
+        return (out, allTakeable ? (guaranteed == 0 ? "jump-random" : "jump-random+guaranteed")
+                                 : "INCOMPLETE")
+    }
+
+    /// A spot the player can always take: just above the nearest surface, close enough to
+    /// be collected by walking into it.
+    ///
+    /// The player's pickup point sits 45% up their body, so standing on a surface it is
+    /// about 18 above their feet — a coin 14 above that surface is within reach of the
+    /// standing body with room to spare. Arithmetic, not a simulation, which is the point:
+    /// it cannot fail, so it can backstop the proofs.
+    private static func guaranteedGrabSpot(near anchor: CGPoint, level: Level) -> CGPoint? {
+        for step in stride(from: CGFloat(0), through: 400, by: 20) {
+            for x in [anchor.x + step, anchor.x - step] {
+                guard let top = surfaceTopUnder(x, level: level) else { continue }
+                let c = CGPoint(x: x, y: top - 14)
+                if !insideSolid(c, level: level) { return c }
+            }
+        }
+        return nil
+    }
+
+    /// The TOPMOST surface at an x — the platform a player standing at that x would be
+    /// on, and the one `collectible` stands on to prove the coin.
+    private static func surfaceTopUnder(_ x: CGFloat, level: Level) -> CGFloat? {
+        var best: CGFloat?
+        for s in level.solids where !s.oneway {
+            if x < s.x || x > s.x + s.w { continue }
+            if best == nil || s.y < best! { best = s.y }
+        }
+        return best
+    }
+
+    /// True when a point sits inside solid rock, with a small margin so a coin is not
+    /// placed half-buried in a ledge it technically clears.
+    private static func insideSolid(_ p: CGPoint, level: Level) -> Bool {
+        level.solids.contains {
+            p.x >= $0.x && p.x <= $0.x + $0.w && p.y >= $0.y - 8 && p.y <= $0.y + $0.h
+        }
     }
 
     // MARK: - Coins from the route

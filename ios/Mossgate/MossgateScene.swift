@@ -57,6 +57,17 @@ final class MossgateScene: SKScene {
     private var skyCacheSeed: Int = -1
     /// Autopilot coin layouts, keyed by level and run seed.
     private var coinRouteCache: [String: [CGPoint]] = [:]
+    /// Bumped for every fresh attempt at a gate: a death and retry, or arriving at a
+    /// different gate. A layout pass re-entering `startLevel` does NOT bump it, which is
+    /// what keeps the coins still while the view is resizing — and what makes the coins
+    /// new on each attempt without making them jump around during one.
+    private var attemptNonce = 0
+    /// Set once the remaining coins have been moved mid-gate (see
+    /// `reshuffleRemainingCoins`), so it happens at most once per attempt.
+    private var coinsReshuffled = false
+    /// Deaths this attempt. A gate that has already killed the player is not an easy
+    /// one, so its coins are left where they are.
+    private var deathsThisAttempt = 0
     /// Where this load's coins came from: "runner" or "authored" (the fallback).
     private(set) var coinSource = "authored"
     private var cp: Int = -1
@@ -432,43 +443,61 @@ final class MossgateScene: SKScene {
         let gates = Levels.build(seed: seed)
         var all = 0
         var bad = 0
-        var worstMove: CGFloat = 0
+        var walkable = 0
+        var lowest: CGFloat = .greatestFiniteMagnitude
+        var leastMove: CGFloat = .greatestFiniteMagnitude
         for g in gates {
             let t = Self.moverTiming(for: g, seed: seed)
             let layout = Autopilot.coinLayout(level: g, phase: t.phase,
                                               period: t.period, seed: seed)
             var unreachable: [Int] = []
-            var highest: CGFloat = 0
-            // Route-sourced coins are validated by ROUTE MEMBERSHIP: a route point is
-            // by construction somewhere the player was, so the player passes within
-            // pickup range of it by definition. Asking the ballistic ground-launch
-            // probe about them answers a question about a different motion and comes
-            // back "no" — so the check only applies to coins placed from the designed
-            // position, and `checked` says how many that was.
-            let checksGround = layout.source != "route"
+            var lowestHere: CGFloat = .greatestFiniteMagnitude
+            var belowHead = 0
             var checked = 0
-            var moved: CGFloat = 0
             for (i, c) in layout.coins.enumerated() {
-                if i < g.coins.count {
-                    moved = max(moved, hypot(c.x - g.coins[i].x, c.y - g.coins[i].y))
+                if let h = Autopilot.heightAboveGround(of: c, in: g) {
+                    lowestHere = min(lowestHere, h)
+                    // "the character must always jump to take the coin": a coin at or
+                    // below the player's own height is taken by walking past instead.
+                    if h <= Phys.playerH { belowHead += 1 }
                 }
-                if let h = Autopilot.heightAboveGround(of: c, in: g) { highest = max(highest, h) }
-                guard checksGround else { continue }
                 checked += 1
-                if !Autopilot.collectible(c, level: g, phase: t.phase, period: t.period) {
+                // The test asks exactly what the player experiences: one ordinary jump.
+                if !Autopilot.collectible(c, level: g, phase: t.phase, period: t.period,
+                                          singleJumpOnly: true) {
                     unreachable.append(i)
                 }
             }
+            // The layout a second attempt would use. The two have to differ, or "the coin
+            // position is always different when a level starts" is not true. Only the
+            // first few gates are compared: each layout is real simulation work, and 36
+            // gates' worth of it blocks the main thread long enough to be terminated —
+            // which is the very thing this pass is fixing.
+            var avgMove: CGFloat = 0
+            if g.id < 4 {
+                let nextAttempt = Autopilot.coinLayout(level: g, phase: t.phase,
+                                                       period: t.period, seed: seed &+ 7919)
+                var movedBy: CGFloat = 0
+                for (i, c) in layout.coins.enumerated() where i < nextAttempt.coins.count {
+                    movedBy += hypot(c.x - nextAttempt.coins[i].x, c.y - nextAttempt.coins[i].y)
+                }
+                avgMove = layout.coins.isEmpty ? 0 : movedBy / CGFloat(layout.coins.count)
+            }
             all += layout.coins.count
             bad += unreachable.count
-            worstMove = max(worstMove, moved)
+            walkable += belowHead
+            lowest = min(lowest, lowestHere)
+            // Only the compared gates may contribute to this, or the uncompared ones
+            // report 0 and the minimum is always 0 — which is what it did.
+            if g.id < 4 { leastMove = min(leastMove, avgMove) }
             let flag = unreachable.isEmpty ? "ok" : "NOT COLLECTIBLE \(unreachable)"
             print("[Mossgate:COIN] world \(g.world) key \(g.id) \"\(g.name)\" src=\(layout.source) "
-                  + "coins=\(layout.coins.count) groundChecked=\(checked) highest=\(Int(highest)) "
-                  + "movedFromDesigned=\(Int(moved)) \(flag)")
+                  + "coins=\(layout.coins.count) belowHeadHeight=\(belowHead) "
+                  + "lowest=\(Int(lowestHere)) avgMoveNextAttempt=\(Int(avgMove)) checked=\(checked) \(flag)")
         }
         print("[Mossgate:COIN] TOTAL coins=\(all) notCollectible=\(bad) "
-              + "worstMoveFromDesigned=\(Int(worstMove)) seed=\(seed)")
+              + "collectableWithoutJumping=\(walkable) lowestHeight=\(Int(lowest)) "
+              + "smallestMoveBetweenAttempts=\(Int(leastMove)) seed=\(seed)")
     }
 
     /// Test hook: `-TestLevelGen 1` builds every gate for this run seed and reports
@@ -771,6 +800,13 @@ final class MossgateScene: SKScene {
     // ── Level setup ───────────────────────────────────────────────
 
     func startLevel(_ index: Int) {
+        // A different gate is a fresh attempt, so its coins are new. Re-entering with the
+        // same index is a layout pass, not a new attempt.
+        if index != levelIndex {
+            attemptNonce &+= 1
+            coinsReshuffled = false
+            deathsThisAttempt = 0
+        }
         loadLevel(index: index, toState: .play)
         runMoverTestIfRequested()
         runDeathTestHookIfRequested()
@@ -905,13 +941,16 @@ final class MossgateScene: SKScene {
     /// Cached, because the simulation is the expensive part of a load and
     /// loadLevel can run several times in one layout pass.
     private func aiCoinPositions() -> [CGPoint] {
-        let key = "\(levelIndex)-\(SettingsStore.shared.runSeed)"
+        // The attempt is part of the key: a new attempt gets a new layout, a layout pass
+        // in the middle of one reuses the cached one.
+        let key = "\(levelIndex)-\(SettingsStore.shared.runSeed)-\(attemptNonce)"
         if let cached = coinRouteCache[key] { return cached }
 
         let layout = Autopilot.coinLayout(level: level,
                                           phase: moverPhaseOffset,
                                           period: moverPeriodScale,
-                                          seed: SettingsStore.shared.runSeed)
+                                          seed: SettingsStore.shared.runSeed
+                                              &+ attemptNonce &* 7919)
         coinSource = layout.source
         coinRouteCache[key] = layout.coins
         return layout.coins
@@ -982,7 +1021,41 @@ final class MossgateScene: SKScene {
         SettingsStore.shared.clearGateProgress(for: levelIndex)
     }
 
-    func retryLevel() { loadLevel(index: levelIndex, toState: .play) }
+    func retryLevel() {
+        // A retry is a fresh attempt, so the coins are laid out anew.
+        attemptNonce &+= 1
+        coinsReshuffled = false
+        loadLevel(index: levelIndex, toState: .play)
+    }
+
+    /// Moves every coin the player has not taken to a new random spot, so a gate that is
+    /// going too easily does not stay easy.
+    ///
+    /// Requested as "when the player has not difficult then even change it during the
+    /// gameplay". The same jump proof applies as at load, so a reshuffled coin is never
+    /// one that cannot be reached.
+    private func reshuffleRemainingCoins() {
+        coinsReshuffled = true
+        let fresh = Autopilot.coinLayout(level: level, phase: moverPhaseOffset,
+                                         period: moverPeriodScale,
+                                         seed: SettingsStore.shared.runSeed
+                                             &+ attemptNonce &* 7919 &+ 1_048_573)
+        var moved = 0
+        for i in level.coins.indices where !coinsGot.contains(i) {
+            guard i < fresh.coins.count, i < coinPos.count else { continue }
+            coinPos[i] = fresh.coins[i]
+            coinNodes[safe: i]?.position = CGPoint(x: fresh.coins[i].x * viewScale,
+                                                   y: fresh.coins[i].y * viewScale)
+            moved += 1
+        }
+        guard moved > 0 else { return }
+        // A small warm burst where the player is, so the change is noticed rather than
+        // looking like the coins were always there.
+        burst(at: CGPoint(x: playerX + Phys.playerW / 2, y: playerY - 26), count: 12,
+              color: UIColor(red: 240/255, green: 190/255, blue: 120/255, alpha: 1), speed: 80)
+        print("[Mossgate:COINS] reshuffled \(moved) remaining coins at t=\(Int(time))s "
+              + "(no deaths, \(coinsGot.count)/\(level.coins.count) taken)")
+    }
 
     /// Test hook: `-TestDown 1` measures what the DOWN pad actually changes —
     /// the fall distance in the air with and without it, and the camera pan
@@ -1164,6 +1237,9 @@ final class MossgateScene: SKScene {
     func nextLevel() {
         let next = levelIndex + 1
         if next < Levels.all.count {
+            attemptNonce &+= 1
+            coinsReshuffled = false
+            deathsThisAttempt = 0
             loadLevel(index: next, toState: .play)
         } else {
             toTitle()
@@ -1624,6 +1700,15 @@ final class MossgateScene: SKScene {
             }
         }
 
+        // Move the coins the player has not taken if the gate is proving no trouble.
+        // A run that has cost a life or left coins behind is left alone; a clean one gets
+        // a fresh puzzle instead of a walk.
+        if state == .play, !coinsReshuffled, deathsThisAttempt == 0,
+           time > 20, !level.coins.isEmpty,
+           CGFloat(coinsGot.count) / CGFloat(level.coins.count) >= 0.6 {
+            reshuffleRemainingCoins()
+        }
+
         // Lanterns — collecting one refills a unit of light (capped at max).
         for i in level.lanterns.indices where !lanternsGot.contains(i) {
             let l = i < lanternPos.count ? lanternPos[i] : CGPoint(x: level.lanterns[i].x, y: level.lanterns[i].y)
@@ -1744,6 +1829,7 @@ final class MossgateScene: SKScene {
         burst(at: CGPoint(x: playerX + Phys.playerW/2, y: playerY + Phys.playerH/2),
               count: 18, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 140)
         // Losing the wick costs a unit of light. Running out ends the run.
+        deathsThisAttempt += 1
         let left = SettingsStore.shared.loseLife()
         setState(left <= 0 ? .gameOver : .dead)
         notifyPhase()
