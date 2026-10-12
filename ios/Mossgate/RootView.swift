@@ -114,6 +114,13 @@ struct RootView: View {
                             SettingsStore.shared.notice = "Finish \(prev) to open this one."
                             return
                         }
+                        // Starting a level dismisses anything the alert was still showing. A
+                        // notice set minutes ago — a locked tap, a Duo refusal, a Coin Rush
+                        // result — otherwise sits on screen through the level change, so it looks
+                        // like the tap produced it. That is exactly how a stale "finish the
+                        // previous gate" alert came to look like it fired on an unlocked one.
+                        SettingsStore.shared.notice = nil
+                        Store.shared.message = nil
                         gameLevelIndex = idx
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
                     },
