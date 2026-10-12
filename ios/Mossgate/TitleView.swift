@@ -86,14 +86,15 @@ struct TitleView: View {
                     dailyCard
                     endlessCard
                     coinRushCard
-                    // Above the world list, not below it: in landscape the six world
-                    // cards fill the screen, so a purchase card underneath them is
-                    // something you have to go looking for.
-                    if !settings.hasFullGame {
-                        fullGameCard
-                    }
                     ForEach(Worlds.all, id: \.id) { world in
                         worldCard(world)
+                        // Directly after the free world, before the ones it unlocks. It used to
+                        // sit above the whole list, which made it a banner over the game rather
+                        // than an offer for what comes next; here it reads as the next step,
+                        // which is what it is.
+                        if world.id == 0, !settings.hasFullGame {
+                            fullGameCard
+                        }
                     }
                     Button(action: onOpenHelp) {
                         Label("How to play", systemImage: "questionmark.circle")
