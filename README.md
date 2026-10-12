@@ -3,7 +3,7 @@
 A 2D dusk-ruins platformer for iPhone. Native SwiftUI + SpriteKit + GameKit, built by
 [JPHsystems](https://github.com/jphermans).
 
-**0.7.32 (build 55)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · portrait splash,
+**0.7.33 (build 56)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · iPhone · portrait
 landscape gameplay
 
 Public support, privacy and changelog page: <https://jphermans.github.io/mossgate-support/>
