@@ -208,6 +208,14 @@ struct RootView: View {
         .onChange(of: touch.jump)  { _, _ in touch.push(to: session.scene) }
         .onChange(of: touch.down)  { _, _ in touch.push(to: session.scene) }
         .onChange(of: touch.up)    { _, _ in touch.push(to: session.scene) }
+        // Record a finished Daily Gate.
+        //
+        // Guarded on the run seed still being today's: the ordinary worlds share this phase
+        // change, and a gate cleared in a normal run must never count towards the daily.
+        .onChange(of: hud.phase) { _, newPhase in
+            guard newPhase == .win, SettingsStore.shared.runSeed == DailyGate.seed() else { return }
+            DailyGate.noteWin(coins: hud.coins)
+        }
         // -DemoPlay 1: get off a death screen so filming can continue.
         //
         // Observed here rather than polled by a timer, because a timer closure capturing the

@@ -50,6 +50,17 @@ final class SettingsStore: ObservableObject {
         gates = Levels.build(seed: runSeed)
     }
 
+    /// Start today's Daily Gate.
+    ///
+    /// The run's gates are rebuilt from the date's seed, which is what makes the gate identical
+    /// for every player. It costs the player nothing: the seed is deliberately not persisted, so
+    /// a launch is a new world anyway, and progress is keyed on `gateKey` rather than on the
+    /// seed, so no progress depends on which seed is in force.
+    func startDailyRun() {
+        runSeed = DailyGate.seed()
+        gates = Levels.build(seed: runSeed)
+    }
+
     // MARK: - The full game, and world progression
 
     /// Whether the single in-app purchase is owned. Written by `Store` and read by

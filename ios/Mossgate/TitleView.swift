@@ -68,6 +68,7 @@ struct TitleView: View {
                     if !settings.hasFullGame {
                         fullGameCard
                     }
+                    dailyCard
                     ForEach(Worlds.all, id: \.id) { world in
                         worldCard(world)
                     }
@@ -270,6 +271,53 @@ struct TitleView: View {
                 }
             }
         }
+    }
+
+    /// Today's Daily Gate.
+    ///
+    /// Free for everyone, and the only thing in the game that is different tomorrow. It sits
+    /// above the world list rather than inside it: the 36 gates are the game, and this is the
+    /// reason to open it again.
+    private var dailyCard: some View {
+        let played = DailyGate.playedToday
+        let streak = DailyGate.streak
+        let streakWord = streak == 1 ? "day" : "days"
+        return Button {
+            settings.startDailyRun()
+            onStartLevel(DailyGate.gateIndex)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    Text("DAILY GATE")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(3)
+                        .foregroundStyle(Color("MossgateLantern"))
+                    Spacer(minLength: 0)
+                    Text(DailyGate.todayLabel())
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundStyle(Color("MossgateMuted"))
+                }
+                Text(played ? "Finished — \(DailyGate.bestCoins) coins. A new one tomorrow."
+                            : "A fresh gate today, the same for everyone.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color("MossgateCream"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(streak > 0
+                     ? "\(streak) \(streakWord) in a row · coins are the score"
+                     : "Coins are the score. Every player gets the same gate.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color("MossgateMuted"))
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color("MossgateLantern").opacity(0.12))
+                    .overlay(RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color("MossgateLantern").opacity(0.38), lineWidth: 1))
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     /// The single purchase. Only shown while it is not owned, so the free game never
