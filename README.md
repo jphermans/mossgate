@@ -3,7 +3,7 @@
 A 2D dusk-ruins platformer for iPhone. Native SwiftUI + SpriteKit + GameKit, built by
 [JPHsystems](https://github.com/jphermans).
 
-**0.7.6 (build 29)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · portrait splash,
+**0.7.30 (build 53)** · 36 gates · 6 worlds (1 free, 5 paid) · iOS 18.0+ · portrait splash,
 landscape gameplay
 
 Public support, privacy and changelog page: <https://jphermans.github.io/mossgate-support/>
@@ -23,6 +23,9 @@ and the run is over.
   generated, so the back half of the game is new each time you play.
 - **Every gate is left-to-right**, so the controls stay two thumbs: move, jump, down.
 - **Coins are the score.** Twelve or so per gate; your best count per gate is kept.
+- **The Daily Gate**, free and above the worlds on the title screen: one gate, one seed per
+  calendar day, the same for every player — and a different one tomorrow. Coins are the score
+  and the streak counts the days you finish it (`DailyGate.swift`).
 
 ## Repo layout
 
