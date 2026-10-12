@@ -737,10 +737,10 @@ enum Autopilot {
                 // directly under the coin, so placing relative to anything else leaves the
                 // coin hanging over a surface the proof never used — and a coin hanging
                 // over a pit is one the player jumps at in vain.
-                guard let surfaceY = surfaceTopUnder(x, level: level) else { continue }
-                let c = CGPoint(x: x, y: surfaceY - (bandLow + unit() * (bandHigh - bandLow)))
+                guard let base = coinBaseUnder(x, level: level) else { continue }
+                let c = CGPoint(x: x, y: base - (bandLow + unit() * (bandHigh - bandLow)))
                 // The cheap rejections come first; the proof is the expensive one.
-                guard !insideSolid(c, level: level) else { continue }
+                guard coinSpotAllowed(c, level: level) else { continue }
                 proofsLeft -= 1
                 if collectible(c, level: level, phase: phase, period: period,
                                singleJumpOnly: true) {
@@ -752,7 +752,7 @@ enum Autopilot {
 
             // 2. Where the level author put it, if that one is takeable — better a spot
             //    the level was designed around than one invented below.
-            if chosen == nil, proofsLeft > 0, !insideSolid(anchor, level: level) {
+            if chosen == nil, proofsLeft > 0, coinSpotAllowed(anchor, level: level) {
                 proofsLeft -= 1
                 if collectible(anchor, level: level, phase: phase, period: period,
                                singleJumpOnly: true) {
@@ -775,10 +775,35 @@ enum Autopilot {
 
             out.append(chosen ?? anchor)
         }
+
+        // Final pass. Whatever route a coin took to get here — random, authored, or the
+        // guarantee — it leaves obeying both rules. Cheaper and far more certain than proving
+        // them at each of the three placement sites and on every early return between them.
+        for i in out.indices {
+            if let h = hazardTopUnder(out[i].x, level: level), out[i].y > h - bandLow {
+                out[i].y = h - bandLow
+            }
+            if abs(out[i].x - level.flag.x) < flagClearance {
+                out[i].x = level.flag.x > out[i].x ? level.flag.x - flagClearance
+                                                  : level.flag.x + flagClearance
+                out[i].x = min(max(out[i].x, 40), level.width - 40)
+            }
+        }
+
         let ms = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000.0
+        // The two placement rules, counted rather than assumed. Both must be zero on every
+        // gate: a coin low over spikes kills the player who goes for it, and a coin on the
+        // flag is either free or mistaken for the goal.
+        var overHazard = 0
+        var atFlag = 0
+        for c in out {
+            if let h = hazardTopUnder(c.x, level: level), c.y > h - 45 { overHazard += 1 }
+            if abs(c.x - level.flag.x) < flagClearance { atFlag += 1 }
+        }
         if ProcessInfo.processInfo.arguments.contains("-TestCoins") {
             print("[Mossgate:COIN]   \(level.name): \(level.coins.count) coins, "
                   + "jumpProven=\(proven) guaranteedGrab=\(guaranteed) unplaced=\(unplaced) "
+                  + "overHazard=\(overHazard) atFlag=\(atFlag) "
                   + "took=\(String(format: "%.0f", ms))ms")
         }
         let allTakeable = unplaced == 0
@@ -797,11 +822,57 @@ enum Autopilot {
         for step in stride(from: CGFloat(0), through: 400, by: 20) {
             for x in [anchor.x + step, anchor.x - step] {
                 guard let top = surfaceTopUnder(x, level: level) else { continue }
+                // Refuse spikes outright. The whole promise of this spot is that you can walk
+                // into the coin without jumping — and you cannot walk anywhere near a spike, so
+                // 14 above a spike is not a guarantee, it is a trap.
+                guard hazardTopUnder(x, level: level) == nil else { continue }
                 let c = CGPoint(x: x, y: top - 14)
-                if !insideSolid(c, level: level) { return c }
+                if coinSpotAllowed(c, level: level) { return c }
             }
         }
         return nil
+    }
+
+    /// Top of any spike whose footprint covers `x` (with a margin), or nil.
+    ///
+    /// Spikes are not in `level.solids`, so `surfaceTopUnder` cannot see them — and that is how
+    /// a coin ends up hanging level with a bramble, which is a coin that kills you for taking
+    /// it. Asked for as "place coins never so low over objects that kills the character".
+    private static func hazardTopUnder(_ x: CGFloat, level: Level) -> CGFloat? {
+        var best: CGFloat?
+        // The margin matters: a coin just clear of a spike still pulls you sideways onto it.
+        let margin: CGFloat = 20
+        for s in level.spikes where x >= s.x - margin && x <= s.x + s.w + margin {
+            if best == nil || s.y < best! { best = s.y }
+        }
+        return best
+    }
+
+    /// What a coin hangs above at `x`: the highest thing under it, whether that is a ledge or
+    /// the spikes standing on one. Smaller y is higher, so this is the smaller of the two.
+    private static func coinBaseUnder(_ x: CGFloat, level: Level) -> CGFloat? {
+        switch (surfaceTopUnder(x, level: level), hazardTopUnder(x, level: level)) {
+        case let (s?, h?): return min(s, h)
+        case let (s?, nil): return s
+        case let (nil, h?): return h
+        default: return nil
+        }
+    }
+
+    /// How far a coin must stay from the level's flag.
+    ///
+    /// Asked for as "place coins of a level never the end flag". A coin sitting on the goal is
+    /// either taken for free on the way through, or mistaken for the goal itself.
+    static let flagClearance: CGFloat = 110
+
+    /// Everything a coin spot has to be, checked in one place so the rule cannot be true on
+    /// one placement path and false on another.
+    static func coinSpotAllowed(_ p: CGPoint, level: Level) -> Bool {
+        if insideSolid(p, level: level) { return false }
+        if abs(p.x - level.flag.x) < flagClearance { return false }
+        // At least the low end of the hanging band above anything lethal underneath.
+        if let h = hazardTopUnder(p.x, level: level), p.y > h - 45 { return false }
+        return true
     }
 
     /// The TOPMOST surface at an x — the platform a player standing at that x would be
