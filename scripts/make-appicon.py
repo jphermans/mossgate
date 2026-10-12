@@ -35,25 +35,30 @@ def is_glass(r, g, b, a):
 
 # --- palettes. Light is sampled from a real in-game frame; dark and tinted are the same
 #     composition relit rather than separate artwork.
+#
+#     The first Light pass used the in-game night sky literally — (5, 8, 38) at the top. That
+#     was ACCURATE and the VALUE was wrong: an app icon is read at 60pt on a bright home
+#     screen, where a near-black sky just reads as a dark square. Asked for as "make the icon
+#     what lighter it is too dark". These are dusk, not night.
 LIGHT = dict(
-    sky=[(5, 8, 38), (8, 14, 42), (11, 20, 45), (14, 28, 48)],
-    firs=(12, 24, 30), ground=(48, 62, 21), ground_lit=(81, 103, 31),
-    moon=(228, 213, 193), moon_shade=(150, 138, 122),
-    star=(228, 213, 193), star_dim=(150, 140, 126),
-    glow=(255, 152, 52), glow_alpha=0.45, lantern="colour",
+    sky=[(42, 60, 124), (52, 74, 138), (66, 92, 148), (78, 112, 150)],
+    firs=(44, 70, 76), ground=(96, 122, 58), ground_lit=(140, 172, 76),
+    moon=(250, 242, 226), moon_shade=(188, 178, 160),
+    star=(252, 246, 232), star_dim=(196, 188, 170),
+    glow=(255, 178, 84), glow_alpha=0.55, lantern="colour",
 )
 DARK = dict(
-    sky=[(2, 3, 14), (3, 6, 18), (4, 9, 20), (6, 13, 22)],
-    firs=(5, 11, 14), ground=(20, 27, 10), ground_lit=(36, 48, 15),
-    moon=(196, 184, 166), moon_shade=(120, 110, 98),
-    star=(206, 194, 176), star_dim=(104, 98, 88),
-    glow=(255, 150, 48), glow_alpha=0.55, lantern="colour",
+    sky=[(10, 16, 44), (14, 22, 52), (18, 30, 60), (22, 38, 64)],
+    firs=(16, 30, 34), ground=(44, 60, 26), ground_lit=(66, 88, 34),
+    moon=(210, 200, 182), moon_shade=(130, 120, 106),
+    star=(220, 210, 192), star_dim=(116, 110, 98),
+    glow=(255, 158, 56), glow_alpha=0.55, lantern="colour",
 )
 TINTED = dict(
-    sky=[(28, 28, 28), (34, 34, 34), (40, 40, 40), (46, 46, 46)],
-    firs=(22, 22, 22), ground=(58, 58, 58), ground_lit=(78, 78, 78),
-    moon=(150, 150, 150), moon_shade=(104, 104, 104),
-    star=(170, 170, 170), star_dim=(112, 112, 112),
+    sky=[(44, 44, 44), (54, 54, 54), (64, 64, 64), (74, 74, 74)],
+    firs=(34, 34, 34), ground=(88, 88, 88), ground_lit=(118, 118, 118),
+    moon=(190, 190, 190), moon_shade=(130, 130, 130),
+    star=(200, 200, 200), star_dim=(140, 140, 140),
     glow=(150, 150, 150), glow_alpha=0.0, lantern="mono",
 )
 

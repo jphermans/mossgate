@@ -8,7 +8,30 @@ struct SplashView: View {
 
     var body: some View {
         ZStack {
-            // Dusk gradient — same colours as the game canvas
+            // The painted lantern-bearer — the only real art the game has of its own character.
+            // Dimmed back behind the gradient below so it reads as atmosphere with the title
+            // over it, rather than as a picture the text is sitting on. Same treatment as the
+            // start page's backdrop.
+            Color(red: 0.027, green: 0.078, blue: 0.086)
+                .ignoresSafeArea()
+                .background(
+                    Image("TitleBackdrop")
+                        .resizable()
+                        .scaledToFill()
+                        .scaleEffect(1.06)
+                        .blur(radius: 1)
+                        .saturation(1.0)
+                        // The painting's own background is a near-black navy, so opacity alone
+                        // never made the figure read: at any scrim it contributed darkness, not
+                        // image. Lifting it is what actually brings it through a dark gradient.
+                        .brightness(0.10)
+                        .opacity(1.0)
+                )
+                .clipped()
+
+            // Dusk gradient — same colours as the game canvas. Now a SCRIM rather than the
+            // backdrop it used to be: it has to let the painting through, so it is no longer
+            // opaque.
             LinearGradient(
                 colors: [
                     Color(red: 0.027, green: 0.078, blue: 0.086), // #071416
@@ -19,6 +42,7 @@ struct SplashView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
+            .opacity(0.42)
             .ignoresSafeArea()
 
             // Soft amber radial glow behind the lantern
