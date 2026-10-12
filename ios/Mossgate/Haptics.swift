@@ -21,12 +21,16 @@ import UIKit
 enum Haptics {
     private static func impact(_ style: UIImpactFeedbackGenerator.FeedbackStyle,
                                _ intensity: CGFloat = 1.0) {
+        // One guard in each fire path rather than at ten call sites: the setting belongs to
+        // the mechanism, not to every place that asks it to buzz.
+        guard SettingsStore.shared.hapticsOn else { return }
         let generator = UIImpactFeedbackGenerator(style: style)
         generator.prepare()
         generator.impactOccurred(intensity: intensity)
     }
 
     private static func note(_ type: UINotificationFeedbackGenerator.FeedbackType) {
+        guard SettingsStore.shared.hapticsOn else { return }
         let generator = UINotificationFeedbackGenerator()
         generator.prepare()
         generator.notificationOccurred(type)

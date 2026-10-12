@@ -12,6 +12,11 @@ final class SettingsStore: ObservableObject {
     @Published var sfxOn: Bool {
         didSet { UserDefaults.standard.set(sfxOn, forKey: "sfxOn") }
     }
+    /// On by default, like the sound settings, and the only one that costs nothing to leave on:
+    /// a taptic pulse is silent, so it cannot annoy anyone nearby the way music can.
+    @Published var hapticsOn: Bool {
+        didSet { UserDefaults.standard.set(hapticsOn, forKey: "hapticsOn") }
+    }
     @Published var soundVolume: Double {
         didSet { UserDefaults.standard.set(soundVolume, forKey: "soundVolume") }
     }
@@ -129,6 +134,7 @@ final class SettingsStore: ObservableObject {
     private init() {
         self.soundOn = UserDefaults.standard.object(forKey: "soundOn") as? Bool ?? true
         self.sfxOn = UserDefaults.standard.object(forKey: "sfxOn") as? Bool ?? true
+        self.hapticsOn = UserDefaults.standard.object(forKey: "hapticsOn") as? Bool ?? true
         self.soundVolume = UserDefaults.standard.object(forKey: "soundVolume") as? Double ?? 0.5
         self.sfxVolume = UserDefaults.standard.object(forKey: "sfxVolume") as? Double ?? 0.7
         self.controllerOn = UserDefaults.standard.object(forKey: "controllerOn") as? Bool ?? true
