@@ -228,6 +228,9 @@ struct OverlayPanel: View {
     let onResume: () -> Void
     /// `nil` when there is no way to continue in place (out of light).
     let onRetry: (() -> Void)?
+    /// A fresh attempt at the gate from the top, as opposed to carrying on from the last
+    /// waystone. Falls back to `onRetry` when not supplied.
+    var onRestart: (() -> Void)? = nil
     let onQuit: () -> Void
     let onNext: (() -> Void)?
     /// Name of the world whose LAST gate was just cleared — the moment a world
@@ -268,7 +271,7 @@ struct OverlayPanel: View {
                         })
                         // Game over has one obvious action, so a second
                         // "restart" button beside it would just be noise.
-                        if !isGameOver { secondaryButton(action: onRetry) }
+                        if !isGameOver { secondaryButton(action: onRestart ?? onRetry) }
                     }
                     if let onNext = onNext {
                         Button(action: onNext) {

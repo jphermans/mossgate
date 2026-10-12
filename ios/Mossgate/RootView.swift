@@ -176,13 +176,24 @@ struct RootView: View {
                     phase: hud.phase,
                     hud: hud,
                     onResume: { session.scene?.resume() },
-                    // Game over is terminal: the only way on is a fresh lantern.
+                    // Retry carries on from the last waystone, not from the top of the gate.
+                    //
+                    // These two buttons used to do the same thing — restart the level — which
+                    // meant `respawnAtCheckpoint()` was unreachable from the UI and the Help
+                    // screen's promise ("you carry on from the last waystone you touched") was
+                    // never kept. Reported as "relight seems not to go to the last position".
                     onRetry: (hud.phase == .gameOver)
                              ? {
                                  SettingsStore.shared.refillLives()
-                                 session.scene?.retryLevel()
+                                 session.scene?.respawnAtCheckpoint()
                                }
-                             : { session.scene?.retryLevel() },
+                             : { session.scene?.respawnAtCheckpoint() },
+                    onRestart: (hud.phase == .gameOver)
+                               ? {
+                                   SettingsStore.shared.refillLives()
+                                   session.scene?.retryLevel()
+                                 }
+                               : { session.scene?.retryLevel() },
                     onQuit:   { leaveToSplash() },
                     onNext:   hud.phase == .win && nextGatePlayable
                               ? { session.scene?.nextLevel(); gameLevelIndex += 1 }

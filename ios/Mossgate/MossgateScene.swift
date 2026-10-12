@@ -1299,6 +1299,22 @@ final class MossgateScene: SKScene {
 
     private func deathTestStep(_ n: Int) {
         guard n < 5 else { return }
+        // Step 0: stand on the gate's first waystone, and give the touch a frame to register
+        // before anything kills the player. Killing in the same instant — which is what this
+        // did at first — means the waystone is never touched and the test silently falls back
+        // to the start-of-level path, hiding the very thing it is meant to check.
+        if n == 0 {
+            if let waystone = level.checkpoints.first {
+                placePlayer(at: CGPoint(x: waystone.x, y: waystone.y - 2))
+                print("[Mossgate:DEATH] stood on the first waystone at x=\(Int(waystone.x))")
+            } else {
+                print("[Mossgate:DEATH] this gate has no waystones")
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                self?.deathTestStep(1)
+            }
+            return
+        }
         let before = SettingsStore.shared.lives
         playerY = level.killY + 40          // below the kill line: dies next frame
         playerVy = 0
@@ -1324,7 +1340,16 @@ final class MossgateScene: SKScene {
                 }
                 return
             }
-            self.retryLevel()               // stand back up for the next round
+            // Stand back up the way the retry button does — from the checkpoint, not the top.
+            // Printing the x either side is the whole point of this: if it comes back at the
+            // level's spawn rather than the waystone, the relight is restarting the gate.
+            let waystoneX = level.checkpoints.first.map { Int($0.x) } ?? -1
+            let atDeath = Int(playerX)
+            self.respawnAtCheckpoint()
+            let snapState = self.checkpointSnap == nil ? "NONE" : "recorded"
+            print("[Mossgate:DEATH] respawn: x \(atDeath) -> \(Int(self.playerX))"
+                  + "  waystone x=\(waystoneX)  spawn x=\(Int(level.spawn.x))"
+                  + "  checkpoint=\(snapState)")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.deathTestStep(n + 1) }
         }
     }
