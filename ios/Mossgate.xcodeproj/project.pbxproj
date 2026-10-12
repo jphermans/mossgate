@@ -55,6 +55,7 @@
 		E49C3E6E7FDAD799AF4FB6D4 /* run-2.png in Resources */ = {isa = PBXBuildFile; fileRef = D1D1466E59AA415CC3C4ACCF /* run-2.png */; };
 		EA8475F0D76C3A295DD9EC9C /* idle-2.png in Resources */ = {isa = PBXBuildFile; fileRef = 4AC95713620072197D67623D /* idle-2.png */; };
 		F3CA3CB8F52CEB56D9B66F7B /* checkpoint.png in Resources */ = {isa = PBXBuildFile; fileRef = 1D0A8385B1BE7ADF6585BDA6 /* checkpoint.png */; };
+		F4471835477DF83D57CA7DDC /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220B7FFB76DAE536D7F03C92 /* Haptics.swift */; };
 		F77DEA7CE7B03E2B5D1875F4 /* jump-4.png in Resources */ = {isa = PBXBuildFile; fileRef = A5EFF8135990B5A4B53AE6E7 /* jump-4.png */; };
 		FAACA7FF298B47B6655D3701 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 377ACF894833CE4702A004C9 /* AppDelegate.swift */; };
 		FAE57C79CB8422DE9063EB5C /* ledge.png in Resources */ = {isa = PBXBuildFile; fileRef = 0485FDC6A40826162B74C254 /* ledge.png */; };
@@ -68,6 +69,7 @@
 		0DD7B26F6CE445E7B06F9E22 /* Autopilot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autopilot.swift; sourceTree = "<group>"; };
 		1BF2363ED17F03C16D187541 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		1D0A8385B1BE7ADF6585BDA6 /* checkpoint.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = checkpoint.png; sourceTree = "<group>"; };
+		220B7FFB76DAE536D7F03C92 /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
 		3079C6DCC25B2043D1094B29 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		31AEE4DA1BAA6886EF0CA064 /* GameCenterManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCenterManager.swift; sourceTree = "<group>"; };
 		32AB9BAA2D4923247DAC7300 /* DailyGate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyGate.swift; sourceTree = "<group>"; };
@@ -143,6 +145,7 @@
 				31AEE4DA1BAA6886EF0CA064 /* GameCenterManager.swift */,
 				F6C6311640D5954178254A31 /* GameConfirm.swift */,
 				70BD29C7FBBFCB3E8F0E4C6C /* GamepadManager.swift */,
+				220B7FFB76DAE536D7F03C92 /* Haptics.swift */,
 				9F7BCBEF4E3D0F6F044C175D /* Level.swift */,
 				3406F9383B035A5B45B862D3 /* LevelGen.swift */,
 				3A8F39F2FD140521A9E46725 /* Levels.swift */,
@@ -328,6 +331,7 @@
 				FB1D433C6D72EAB12141DAB3 /* GameCenterManager.swift in Sources */,
 				462B03145A9A3781769C851D /* GameConfirm.swift in Sources */,
 				28EA0CF96DF3C2E370389371 /* GamepadManager.swift in Sources */,
+				F4471835477DF83D57CA7DDC /* Haptics.swift in Sources */,
 				FC889CC01379AB9F4BEFD5A7 /* Level.swift in Sources */,
 				B151A737584D6DF174E96616 /* LevelGen.swift in Sources */,
 				8A09DC4E108C83CF43B48AD9 /* Levels+Run.swift in Sources */,
@@ -384,7 +388,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 66;
+				CURRENT_PROJECT_VERSION = 67;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -418,7 +422,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.7.43;
+				MARKETING_VERSION = 0.7.44;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -500,7 +504,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 66;
+				CURRENT_PROJECT_VERSION = 67;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = "";
 				ENABLE_NS_ASSERTIONS = NO;
@@ -528,7 +532,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
-				MARKETING_VERSION = 0.7.43;
+				MARKETING_VERSION = 0.7.44;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = Mossgate;

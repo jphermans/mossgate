@@ -1852,6 +1852,7 @@ final class MossgateScene: SKScene {
             if hypot(feetX - c.x, midY - c.y) < 40 {
                 coinsGot.insert(i)
                 AudioEngine.shared.coin()
+                Haptics.coin()
                 burst(at: CGPoint(x: c.x, y: c.y), count: 8, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 70)
                 // The HUD only redraws when notifyPhase() runs. The lantern branch
                 // below always called it; this one never did, so the coin counter sat
@@ -1879,6 +1880,7 @@ final class MossgateScene: SKScene {
                 lanternsGot.insert(i)
                 SettingsStore.shared.gainLife()
                 AudioEngine.shared.checkpoint()
+                Haptics.checkpoint()
                 burst(at: CGPoint(x: l.x, y: l.y), count: 14,
                       color: UIColor(red: 1.0, green: 0.84, blue: 0.48, alpha: 1), speed: 95)
                 notifyPhase()
@@ -1892,6 +1894,7 @@ final class MossgateScene: SKScene {
                 cp = i
                 checkpointSnap = (CGPoint(x: c.x, y: c.y), Array(coinsGot), cp)
                 AudioEngine.shared.checkpoint()
+                Haptics.checkpoint()
                 burst(at: CGPoint(x: c.x, y: c.y - 48), count: 12,
                       color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 80)
             }
@@ -1942,6 +1945,7 @@ final class MossgateScene: SKScene {
                   count: 8, color: UIColor(red: 0.55, green: 0.62, blue: 0.42, alpha: 1),
                   speed: 50)
             AudioEngine.shared.land()
+            Haptics.land()
         }
     }
 
@@ -1978,6 +1982,7 @@ final class MossgateScene: SKScene {
         jumpAge = 0
         coyote = 0
         AudioEngine.shared.jump(double)
+        Haptics.jump(double)
         burst(at: CGPoint(x: playerX + Phys.playerW/2, y: playerY + Phys.playerH),
               count: double ? 10 : 6,
               color: double ? UIColor(red: 244/255, green: 234/255, blue: 212/255, alpha: 1)
@@ -1989,6 +1994,7 @@ final class MossgateScene: SKScene {
 
     private func die() {
         AudioEngine.shared.die()
+        Haptics.die()
         burst(at: CGPoint(x: playerX + Phys.playerW/2, y: playerY + Phys.playerH/2),
               count: 18, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 140)
         // Losing the wick costs a unit of light. Running out ends the run.
@@ -2000,6 +2006,7 @@ final class MossgateScene: SKScene {
 
     private func win() {
         AudioEngine.shared.win()
+        Haptics.win()
         burst(at: CGPoint(x: level.flag.x, y: level.flag.y - 40),
               count: 22, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 120)
         SettingsStore.shared.markCleared(level: levelIndex, coins: coinsGot.count)

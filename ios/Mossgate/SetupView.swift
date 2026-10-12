@@ -120,10 +120,12 @@ struct SetupView: View {
                     onConfirm: {
                         settings.resetProgress()
                         AudioEngine.shared.tap()
+                        Haptics.tap()
                         showResetConfirm = false
                     },
                     onCancel: {
                         AudioEngine.shared.tap()
+                        Haptics.tap()
                         showResetConfirm = false
                     }
                 )
@@ -154,6 +156,7 @@ struct SetupView: View {
                 Button {
                     settings.newRun()
                     AudioEngine.shared.tap()
+                    Haptics.tap()
                 } label: {
                     // Sharing the seed is the point of showing it: every run is procedurally
                     // varied, so the seed is the only way to hand someone the same gates.
