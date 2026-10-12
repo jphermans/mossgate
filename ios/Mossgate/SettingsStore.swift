@@ -61,6 +61,47 @@ final class SettingsStore: ObservableObject {
     /// for every player. It costs the player nothing: the seed is deliberately not persisted, so
     /// a launch is a new world anyway, and progress is keyed on `gateKey` rather than on the
     /// seed, so no progress depends on which seed is in force.
+    // MARK: - Endless Run
+
+    /// Whether the current run is an Endless one.
+    ///
+    /// A property of the RUN rather than a setting, like the daily's seed: it begins when the
+    /// card is tapped and ends when the run does, and nothing persists it.
+    @Published private(set) var endlessRun = false
+
+    /// Gates reached in this Endless run.
+    @Published private(set) var endlessGates = 0
+
+    /// The best chain so far. Persisted, because a personal best that vanishes on relaunch is
+    /// not a personal best.
+    var endlessBest: Int { UserDefaults.standard.integer(forKey: "endlessBest") }
+
+    /// Start an Endless run: a fresh world, and a chain to see how far it goes.
+    ///
+    /// A new seed rather than the current one, so the chain is not a repeat of whatever the
+    /// player was just looking at — the appeal is not knowing what is next.
+    func startEndlessRun() {
+        endlessRun = true
+        endlessGates = 0
+        runSeed = Int.random(in: 1...999_999)
+        gates = Levels.build(seed: runSeed)
+    }
+
+    /// One more gate behind us. Returns how many that makes.
+    @discardableResult
+    func noteEndlessGate() -> Int {
+        endlessGates += 1
+        if endlessGates > endlessBest { UserDefaults.standard.set(endlessGates, forKey: "endlessBest") }
+        return endlessGates
+    }
+
+    /// Leaving the mode, or it ending. Never persisted, so this only has to be true for the
+    /// life of the run.
+    func endEndlessRun() {
+        endlessRun = false
+        endlessGates = 0
+    }
+
     func startDailyRun() {
         runSeed = DailyGate.seed()
         gates = Levels.build(seed: runSeed)

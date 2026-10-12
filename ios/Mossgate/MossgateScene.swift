@@ -2009,6 +2009,16 @@ final class MossgateScene: SKScene {
         Haptics.win()
         burst(at: CGPoint(x: level.flag.x, y: level.flag.y - 40),
               count: 22, color: UIColor(red: 240/255, green: 160/255, blue: 64/255, alpha: 1), speed: 120)
+        // Endless: the flag is a doorway rather than an ending. Score the gate and roll straight
+        // into the next one. No clear is recorded and no achievement is reported, because this is
+        // a mode rather than progression — running a chain should not be a way to open the 36
+        // gates or to claim the world-completion achievements.
+        if SettingsStore.shared.endlessRun {
+            let reached = SettingsStore.shared.noteEndlessGate()
+            print("[Mossgate:RUN] endless gate \(reached)")
+            nextLevel()
+            return
+        }
         SettingsStore.shared.markCleared(level: levelIndex, coins: coinsGot.count)
         // Clearing a gate rewards a unit of light (capped at max).
         SettingsStore.shared.gainLife()

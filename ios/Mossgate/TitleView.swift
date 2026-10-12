@@ -9,6 +9,9 @@ struct TitleView: View {
     /// free for everyone, but the gate it lives on is still behind the progression chain, so
     /// going through the ordinary path refuses it and the tap does nothing.
     let onStartDaily: (Int) -> Void
+    /// Start an Endless Run. Like the daily it deliberately skips the unlock check: it
+    /// rebuilds the world from a fresh seed, so there is no gate of this run to unlock.
+    let onStartEndless: (Int) -> Void
     let onOpenSetup: () -> Void
     let onOpenHelp: () -> Void
     let onOpenGameCenter: () -> Void
@@ -78,6 +81,7 @@ struct TitleView: View {
                     // scroll to discover the feature existed. Reported as "where are the mini
                     // games?".
                     dailyCard
+                    endlessCard
                     // Above the world list, not below it: in landscape the six world
                     // cards fill the screen, so a purchase card underneath them is
                     // something you have to go looking for.
@@ -298,6 +302,51 @@ struct TitleView: View {
                 }
             }
         }
+    }
+
+    /// Endless Run.
+    ///
+    /// The second of the three mini-games. Unlike the daily there is no seed to share — a fresh
+    /// world each time is the point — so this card is about the personal best, which is the only
+    /// thing that carries between runs.
+    private var endlessCard: some View {
+        let best = settings.endlessBest
+        return Button {
+            settings.startEndlessRun()
+            onStartEndless(0)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 10) {
+                    Text("ENDLESS RUN")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(3)
+                        .foregroundStyle(Color("MossgateLantern"))
+                    Spacer(minLength: 0)
+                    if best > 0 {
+                        Text("best \(best)")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(Color("MossgateMuted"))
+                    }
+                }
+                Text("One chain, gate after gate, until the light runs out.")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color("MossgateCream"))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(best > 0 ? "Your longest is \(best) gates. A new world every time."
+                              : "A new world every time. Gates behind you are the score.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color("MossgateMuted"))
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color("MossgateSurface").opacity(0.85))
+                    .overlay(RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color("MossgateBorder"), lineWidth: 1))
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     /// Today's Daily Gate.

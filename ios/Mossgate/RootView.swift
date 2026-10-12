@@ -120,6 +120,12 @@ struct RootView: View {
                         gameLevelIndex = idx
                         withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
                     },
+                    onStartEndless: { idx in
+                        // Not guarded, for the same reason the daily is not: the world was just
+                        // rebuilt from a fresh seed, so there is no gate of this run to unlock.
+                        gameLevelIndex = idx
+                        withAnimation(.easeInOut(duration: 0.25)) { phase = .game }
+                    },
                     onOpenSetup: { showSetup = true },
                     onOpenHelp: { showHelp = true },
                     onOpenGameCenter: {
