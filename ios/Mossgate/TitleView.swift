@@ -30,22 +30,34 @@ struct TitleView: View {
             // the setup page anymore on the start page" — and the Setup entry lives at the
             // bottom of that scroll.
             //
-            // A background is laid out against the view it decorates and cannot affect its
-            // siblings at all, which is the whole reason to use one here. It also covers the
-            // safe areas for free, without the scale-and-clip dance the sibling version needed
-            // to hide the clipped edge of its blur.
-            Color("MossgateDusk")
-                .ignoresSafeArea()
-                .background(
+            // The painting, as an OVERLAY on the base colour.
+            //
+            // It used to be a .background() of that Color — which sits BEHIND the view, and the
+            // Color is opaque, so the image could never show at any blur or opacity. Same bug as
+            // the splash, from the same misunderstanding of what .background() does.
+            //
+            // It stays a bounded Rectangle rather than a bare scaledToFill image, because that
+            // is what keeps the ScrollView below scrollable: an image with no frame is laid out
+            // at its own size, the stack's ideal size goes unbounded, and the ScrollView beside
+            // it then has nothing to scroll. That was the report — "i can not scroll to the
+            // setup page anymore on the start page".
+            //
+            // A Rectangle is flexible and takes the available space, so it satisfies both: the
+            // image is drawn on top of the fill, and the stack is never asked for an infinite
+            // height. It also covers the safe areas without the scale-and-clip dance the old
+            // sibling version needed to hide the clipped edge of its blur.
+            Rectangle()
+                .fill(Color("MossgateDusk"))
+                .overlay(
                     Image("TitleBackdrop")
                         .resizable()
                         .scaledToFill()
-                        .scaleEffect(1.08)
                         .blur(radius: 9)
                         .saturation(0.9)
                         .opacity(0.6)
                 )
                 .clipped()
+                .ignoresSafeArea()
             duskGradient
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {

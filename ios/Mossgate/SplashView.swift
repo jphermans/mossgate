@@ -8,30 +8,31 @@ struct SplashView: View {
 
     var body: some View {
         ZStack {
-            // The painted lantern-bearer — the only real art the game has of its own character.
-            // Dimmed back behind the gradient below so it reads as atmosphere with the title
-            // over it, rather than as a picture the text is sitting on. Same treatment as the
-            // start page's backdrop.
-            Color(red: 0.027, green: 0.078, blue: 0.086)
-                .ignoresSafeArea()
-                .background(
+            // Bottom layer: the painting.
+            //
+            // The image is an OVERLAY on a base fill, not a .background() of the Color below.
+            // .background() sits BEHIND its view, and that Color is opaque — so the painting was
+            // behind an opaque layer and could never show, at any brightness or opacity. An
+            // overlay draws on top of the fill, which is what was meant.
+            //
+            // The fill is a Rectangle rather than a bare Image because a Rectangle is flexible
+            // and takes the available space; a bare .resizable().scaledToFill() in a ZStack is
+            // laid out at the image's own 1024pt size, which would stretch the stack and push
+            // the title off centre.
+            Rectangle()
+                .fill(Color(red: 0.027, green: 0.078, blue: 0.086))
+                .overlay(
                     Image("TitleBackdrop")
                         .resizable()
                         .scaledToFill()
-                        .scaleEffect(1.06)
                         .blur(radius: 1)
-                        .saturation(1.0)
-                        // The painting's own background is a near-black navy, so opacity alone
-                        // never made the figure read: at any scrim it contributed darkness, not
-                        // image. Lifting it is what actually brings it through a dark gradient.
                         .brightness(0.10)
-                        .opacity(1.0)
                 )
                 .clipped()
+                .ignoresSafeArea()
 
-            // Dusk gradient — same colours as the game canvas. Now a SCRIM rather than the
-            // backdrop it used to be: it has to let the painting through, so it is no longer
-            // opaque.
+            // Dusk gradient — same colours as the game canvas. A SCRIM rather than the
+            // backdrop it used to be, so it darkens the painting without hiding it.
             LinearGradient(
                 colors: [
                     Color(red: 0.027, green: 0.078, blue: 0.086), // #071416
@@ -42,7 +43,7 @@ struct SplashView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .opacity(0.42)
+            .opacity(0.55)
             .ignoresSafeArea()
 
             // Soft amber radial glow behind the lantern
