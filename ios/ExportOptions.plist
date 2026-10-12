@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ExportOptions.plist — what `xcodebuild -exportArchive` reads at the upload step.
+
+  Used by Xcode's Organizer automatically, and by the command line:
+
+    xcodebuild -archivePath build/Mossgate.xcarchive \
+      -exportArchive -exportOptionsPlist ExportOptions.plist \
+      -exportPath build/export
+
+  teamID is a PLACEHOLDER and must be replaced with your real 10-character Apple Developer
+  team ID before this will sign. It is not a secret — it is printed in the Apple Developer
+  portal next to your membership, and in `security find-identity -v -p codesigning` — but
+  committing a real one ties the repo to one team, so it stays generic here and gets set per
+  release. See DEPLOYMENT.md.
+-->
+<plist version="1.0">
+<dict>
+  <key>destination</key>          <string>export</string>
+  <!-- Xcode 26+ name. On older toolchains this value was `app-store`. -->
+  <key>method</key>               <string>app-store-connect</string>
+  <!-- Keep symbols on: Apple uses them to symbolicate TestFlight crash logs, and a crash
+       report full of addresses is not worth having. -->
+  <key>uploadSymbols</key>        <true/>
+  <key>uploadBitcode</key>        <false/>
+  <key>compileBitcode</key>       <false/>
+  <key>signingStyle</key>         <string>automatic</string>
+  <key>teamID</key>               <string>YOUR_TEAM_ID</string>
+  <key>stripSwiftSymbols</key>    <true/>
+  <!-- No thinning: App Store Connect wants the universal build, and thinning here produces
+       several variants for no benefit. -->
+  <key>thinning</key>             <string>&lt;none&gt;</string>
+</dict>
+</plist>

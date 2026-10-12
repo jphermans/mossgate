@@ -20,8 +20,8 @@ settings:
     #   ./scripts/bump-ios-version.py --patch    # 0.1.0 -> 0.1.1  (bugfix batch)
     #   ./scripts/bump-ios-version.py --minor    # 0.1.0 -> 0.2.0  (new features)
     # The script rewrites these two lines and re-runs xcodegen.
-    MARKETING_VERSION: "0.7.33"
-    CURRENT_PROJECT_VERSION: "56"
+    MARKETING_VERSION: "0.7.34"
+    CURRENT_PROJECT_VERSION: "57"
     SWIFT_STRICT_CONCURRENCY: minimal
     CODE_SIGN_STYLE: Automatic
     DEVELOPMENT_TEAM: ""
@@ -33,10 +33,16 @@ settings:
     INFOPLIST_KEY_UILaunchScreen_BackgroundColor: "MossgateDusk"
     INFOPLIST_KEY_UILaunchScreen_ImageName: "LaunchLantern"
     INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-    INFOPLIST_KEY_UISupportedInterfaceOrientations~ipad: "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-    INFOPLIST_KEY_UIRequiresFullScreen: "YES"
+    # The ~ipad variant is gone with iPad support. Keeping it would advertise an iPad
+    # orientation set for a binary that no longer supports iPad at all.
+    # REMOVED: INFOPLIST_KEY_UIRequiresFullScreen. Deprecated since iOS 26 and ignored by
+    # it — Apple has rejected binaries that still carry it. It was also pointless here:
+    # the app is iPhone-only, so there is no iPad window to require fullscreen on.
     INFOPLIST_KEY_CFBundleDisplayName: "Mossgate"
     INFOPLIST_KEY_LSApplicationCategoryType: "public.app-category.games"
+    # Declares no non-exempt encryption, so App Store Connect does not stop every upload
+    # with the "Missing Compliance" question. The app makes no network calls at all.
+    INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
     INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance: YES
     INFOPLIST_KEY_UIStatusBarStyle: "UIStatusBarStyleLightContent"
     # Game controller support. This key is what makes iOS deliver controller
