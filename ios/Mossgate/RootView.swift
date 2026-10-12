@@ -183,7 +183,7 @@ struct RootView: View {
                                  session.scene?.retryLevel()
                                }
                              : { session.scene?.retryLevel() },
-                    onQuit:   { leaveToMenu() },
+                    onQuit:   { leaveToSplash() },
                     onNext:   hud.phase == .win && nextGatePlayable
                               ? { session.scene?.nextLevel(); gameLevelIndex += 1 }
                               : nil,
@@ -227,24 +227,36 @@ struct RootView: View {
         SettingsStore.shared.gateUnlocked(gameLevelIndex + 1)
     }
 
-    /// Leave the level and go back to the gates.
+    /// Wrap up the current gate before leaving it, wherever we are going.
     ///
-    /// One definition, because there are two ways out — the HUD's back button and
-    /// the pause panel's — and leaving while out of light would otherwise strand the
-    /// player on the gates with no light left to spend.
-    private func leaveToMenu() {
-        // Keep the gate's progress before the scene is torn down — the fix for
-        // "When leaving game to menu and there is a progression then this is not
-        // saved. So player have to restart the level complete." A gate that ended by
-        // running out of light is the exception: that one starts over, which is what
-        // losing your last life means.
+    /// One definition on purpose. Saving on the way out is a rule that was already missed in
+    /// one place once — "Next gate" ignored the paywall because three callers each answered
+    /// the same question — and two exits duplicating this is exactly how that happens again.
+    private func leaveCurrentGate() {
+        // Keeping the gate's progress is the fix for "When leaving game to menu and there is a
+        // progression then this is not saved. So player have to restart the level complete."
+        // A gate that ended by running out of light is the exception: that one starts over,
+        // which is what losing your last life means.
         if SettingsStore.shared.isOutOfLight {
             session.scene?.discardProgression()
             SettingsStore.shared.refillLives()
         } else {
             session.scene?.saveProgression()
         }
+    }
+
+    /// Back to the gates.
+    private func leaveToMenu() {
+        leaveCurrentGate()
         withAnimation(.easeInOut(duration: 0.25)) { phase = .title }
+    }
+
+    /// Back to the splash poster — the page the game opens on, which is what "the start page"
+    /// means. Separate from `leaveToMenu()`, which goes to the gates; the HUD's back chevron
+    /// is that one, so both destinations stay reachable.
+    private func leaveToSplash() {
+        leaveCurrentGate()
+        withAnimation(.easeInOut(duration: 0.35)) { phase = .splash }
     }
 
     /// Detents for the Setup sheet.

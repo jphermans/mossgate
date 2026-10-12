@@ -262,11 +262,21 @@ struct OverlayPanel: View {
                                 )
                         }
                     }
+                    // Was "All gates", in small muted text at the bottom of the panel. The way
+                    // out was always here, but a de-emphasised label that reads as "show me the
+                    // gates" is not findable, and it did not say which page it went to. Asked
+                    // for as "add in the menu the option to go back to start page", where the
+                    // start page is the splash the game opens on. It stays below the primary
+                    // action, but it now says where it goes and looks like a button.
                     Button(action: onQuit) {
-                        Text("All gates")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Color("MossgateMuted"))
-                            .frame(maxWidth: .infinity, minHeight: 38)
+                        Text("Back to the start page")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color("MossgateCream"))
+                            .frame(maxWidth: .infinity, minHeight: 42)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(Color("MossgateBorder"), lineWidth: 1)
+                            )
                     }
                 }
                 .padding(.horizontal, 18)

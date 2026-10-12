@@ -299,6 +299,14 @@ final class MossgateScene: SKScene {
         runEdgeTestIfRequested()
         runProgressTestIfRequested()
         runCoinSpriteTestIfRequested()
+        // -OpenPause 1 drops straight into the pause panel, so it can be photographed without a
+        // tap. Deferred, like every other hook here: called synchronously from startLevel it
+        // runs inside makeUIView, before the HUD binding is live, and the panel never appears.
+        if ProcessInfo.processInfo.arguments.contains("-OpenPause") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { [weak self] in
+                self?.pause()
+            }
+        }
     }
 
     /// Test hook: `-TestCoinSprites 1` checks that every coin is DRAWN where it can be
